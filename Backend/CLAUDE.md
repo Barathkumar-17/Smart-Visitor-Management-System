@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 0 — Skeleton
-PHASES_COMPLETE: none
+NEXT_PHASE: 1 — Entities & repos
+PHASES_COMPLETE: 0
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: not yet started
+LAST_UPDATED: 2026-08-22 — Phase 0 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -218,3 +218,7 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[pre-build]` Phase 10's simplification offer removed — it was the only soft instruction in the document and it landed on `partial_exit`, which both dashboards show.
 - `[pre-build]` `smoke.sh` steps must assert with `jq -e`; a printing-only script is not a regression net.
 - `[pre-build]` End-of-phase spec check promoted from prose into the numbered phase deliverables.
+- `[0]` `/health` returns a body — was unspecified in SPEC, now `{status, now_local, clock_offset_minutes, now}`. Phase 0's verification needs the clock visible through the API and no other endpoint exposes time.
+- `[0]` Clock reads gained readable output — was ISO aware-UTC only, now `clock.now_local()` and `clock.readable()` alongside it. `/health` and `/dev/advance-clock` return both. The ISO `now` is unchanged and remains canonical per SPEC §16.7; the added fields are display only and must never be parsed. `now_local()` also serves Phase 11's `WORKING_HOURS` check and Phase 13's "today" comparisons.
+- `[0]` `require_role` rejects an unrecognised `X-Role` with `NotPermitted` — SPEC §16.1's table has no row for it. Treating an unknown role as valid would be worse.
+- `[0]` `smoke.sh` preflights `jq` and the server, failing with a readable message instead of a raw curl error.
