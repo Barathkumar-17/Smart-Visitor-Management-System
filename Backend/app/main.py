@@ -6,24 +6,41 @@ THIS FILE DOES NOT START THE SCHEDULER. Phase 11 is deferred, jobs/scheduler.py
 is empty, and adding the startup call is part of that phase, not this one.
 """
 
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
 
 from app.core import clock
 from app.core.errors import DomainError, domain_error_handler
-from app.routers import dev
+from app.routers import dev, reference, visitors
+from app.store import seed
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load the seed before the first request.
+
+    SPEC section 13: the prototype must be demoable the moment it starts, so
+    the store is never empty. /dev/reset reloads exactly the same data.
+    """
+    seed.load()
+    yield
+
 
 app = FastAPI(
     title="Smart Visitor Management System",
     description="Campus visitor management for MIT Campus. In-memory prototype.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # The single domain exception handler required by SPEC section 15. Registered
 # on the base class so every subclass in core/errors.py routes through it.
 app.add_exception_handler(DomainError, domain_error_handler)
 
+app.include_router(reference.router)
+app.include_router(visitors.router)
 app.include_router(dev.router)
 
 
@@ -31,7 +48,7 @@ app.include_router(dev.router)
 async def health() -> dict[str, Any]:
     """Liveness, plus the current clock so /dev/advance-clock is observable.
 
-uk    `now` is the canonical aware-UTC value per SPEC section 16.7. `now_local`
+    `now` is the canonical aware-UTC value per SPEC section 16.7. `now_local`
     and `clock_offset_minutes` are there to be read by a human during manual
     testing - they are presentation, not new state.
     """
