@@ -157,7 +157,7 @@ def transition(visit: Visit, to_status: str, actor: str) -> Visit:
 
 
 # =============================================================================
-# Phase 4 - pass request and approval.4, and 7 at approve.
+# Pass request and approval.
 # =============================================================================
 
 
@@ -172,7 +172,7 @@ def list_companions(visit_id: str) -> list:
 
 
 def _resolve_person_count(companions: list | None, person_count: int | None) -> int:
-    """Work out person_count_expected.4, exactly.
+    """Work out person_count_expected, exactly.
 
     | body                    | expected            | companion records |
     | companions[] supplied   | len(companions) + 1 | one per companion |
@@ -180,7 +180,8 @@ def _resolve_person_count(companions: list | None, person_count: int | None) -> 
     | neither                 | 1                   | none              |
     | both                    | InvalidRequest      | -                 |
 
-    The number is always the TOTAL INCLUDING the accountable visitor (the design), which is what the guard's actual headcount is compared against.
+    The number is always the TOTAL INCLUDING the accountable visitor, which
+    is what the guard's actual headcount is compared against.
     """
     if companions is not None and person_count is not None:
         raise InvalidRequest(

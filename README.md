@@ -89,6 +89,42 @@ clock_offset_minutes  : 0
 
 ---
 
+## Logging in
+
+**Every endpoint needs a login.** The only two exceptions are `/health` and the login itself.
+
+There are four accounts, one per role, and they are fixed — there is no sign-up and no user administration.
+
+| Username | Password | Can do |
+|---|---|---|
+| `guard` | `guard123` | Scan people in and out, close visits |
+| `faculty` | `faculty123` | Approve visits, confirm availability, move meetings |
+| `security` | `security123` | Read the campus and exception dashboards, revoke passes |
+| `admin` | `admin123` | Everything, including the honesty panel and the demo tools |
+
+Paste this helper once — everything below uses it:
+
+```powershell
+$B = "http://127.0.0.1:8000"
+
+function Login($user, $pass) {
+  $body = @{ username = $user; password = $pass } | ConvertTo-Json
+  $t = (Invoke-RestMethod -Method Post "$B/auth/login" -ContentType application/json -Body $body).token
+  return @{ Authorization = "Bearer $t" }
+}
+
+$guard    = Login guard    guard123
+$faculty  = Login faculty  faculty123
+$security = Login security security123
+$admin    = Login admin    admin123
+```
+
+Each call returns a header you attach to later requests. Without one you get `401`; with the wrong role you get `403`.
+
+Tokens last 12 hours and survive a reset. `POST /auth/logout` ends one early.
+
+---
+
 ## Who is already in the system
 
 It starts with a campus mid-morning, so there is something to look at immediately. You never have to set anything up.
@@ -111,25 +147,19 @@ It starts with a campus mid-morning, so there is something to look at immediatel
 **To put everything back exactly as it started:**
 
 ```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:8000/dev/reset
+Invoke-RestMethod -Method Post "$B/dev/reset" -Headers $admin
 ```
 
-Every name, number and id comes back identical, so nothing you do is permanent.
+Every name, number and id comes back identical, so nothing you do is permanent. Resetting restores the campus but does **not** log you out.
 
 ---
 
 ## See it working in four minutes
 
-Paste this first — it sets up the shorthand used below.
+With the four tokens from the section above in hand, start from a clean campus:
 
 ```powershell
-$B = "http://127.0.0.1:8000"
-$guard    = @{ "X-Role" = "guard" }
-$faculty  = @{ "X-Role" = "faculty" }
-$security = @{ "X-Role" = "security" }
-$admin    = @{ "X-Role" = "admin" }
-
-Invoke-RestMethod -Method Post "$B/dev/reset" | Out-Null
+Invoke-RestMethod -Method Post "$B/dev/reset" -Headers $admin | Out-Null
 ```
 
 ### One — somebody arrives at the gate
@@ -137,7 +167,7 @@ Invoke-RestMethod -Method Post "$B/dev/reset" | Out-Null
 Suresh Iyer, with two people and a van.
 
 ```powershell
-$qr = (Invoke-RestMethod "$B/passes/v_3").qr
+$qr = (Invoke-RestMethod "$B/passes/v_3" -Headers $guard).qr
 $body = @{
   payload = $qr.payload; signature = $qr.signature
   vehicle_plate = "TN-07-XY-9090"; person_count_in = 3
@@ -171,10 +201,10 @@ Three faces to compare, and the host's phone number so the guard can ring them d
 Fatima Sheikh is already inside, expected at the Department Office.
 
 ```powershell
-"QR before: " + (Invoke-RestMethod "$B/passes/v_4").qr.signature
+"QR before: " + (Invoke-RestMethod "$B/passes/v_4" -Headers $guard).qr.signature
 
 function Scan($code) {
-  $q = (Invoke-RestMethod "$B/passes/v_4").qr
+  $q = (Invoke-RestMethod "$B/passes/v_4" -Headers $guard).qr
   $json = @{ zone_code = $code; payload = $q.payload; signature = $q.signature } | ConvertTo-Json -Depth 5
   $x = Invoke-RestMethod -Method Post "$B/scans/zone" -ContentType application/json -Headers $guard -Body $json
   "{0,-6} {1}" -f $code, $x.result
@@ -187,7 +217,7 @@ $patch = @{ meeting_zone_id = "z_2" } | ConvertTo-Json
 Invoke-RestMethod -Method Patch "$B/visits/v_4/meeting-point" `
   -ContentType application/json -Headers $faculty -Body $patch | Out-Null
 
-"QR after : " + (Invoke-RestMethod "$B/passes/v_4").qr.signature
+"QR after : " + (Invoke-RestMethod "$B/passes/v_4" -Headers $guard).qr.signature
 
 Scan "LIB"           # now correct
 Scan "DEPT"          # now wrong
@@ -244,7 +274,7 @@ cd D:\Projects\SVMS\Backend
 bash smoke.sh
 ```
 
-93 checks. Every one asserts on a specific field, so a wrong answer halts the script at the step that produced it. The last line should read `All steps passed.`
+100 checks. Every one asserts on a specific field, so a wrong answer halts the script at the step that produced it. The last line should read `All steps passed.`
 
 ---
 
@@ -283,13 +313,18 @@ Three parts of the design were deliberately left out. None is abandoned. They we
 
 Three things must be fixed first. All three are honest shortcuts that make the prototype convenient, and all three would make a real deployment indefensible.
 
-### 1. Anyone can call anything
+Authentication used to be the worst of them — a header you typed, believed without question, defaulting to administrator when absent. **That is now fixed.** Every endpoint requires a real login, and the old header grants nothing.
 
-Roles are claimed with a plain header and nothing checks whether the claim is true. Leaving the header off makes you an administrator, and `admin` satisfies every check. There is no login, no password and no token anywhere.
+### 1. The four passwords are written into the repository
 
-Anyone who can reach the server can approve their own visit, revoke someone's pass, or read the entire visitor list.
+`Backend/app/store/seed.py` contains the accounts and their plain-text passwords. They are stored hashed, so dumping the running store gives nothing away — but anyone who can read this code knows all four logins, which makes the login a demonstration of the mechanism rather than actual protection.
 
-Fixing it is more than swapping the header for a login token: the admin-satisfies-everything rule and the absent-header default both have to go, and identity has to become real. Approving a visit currently doesn't check that the caller is the host named on it.
+Two other limits worth knowing:
+
+- **`admin` still satisfies every role check.** With a real login behind it that is ordinary superuser behaviour rather than a hole, but it means one leaked password is total access.
+- **Identity stops at the role.** Logging in as `faculty` proves you are *a* faculty member, not *which* one. Approving a visit still doesn't check that you are the host named on it, because four fixed accounts cannot express thirty individual staff. That needs an account per host.
+
+**The fix:** accounts in a real store with per-person credentials, passwords set on first use rather than in source, and the host check tied to the logged-in user.
 
 ### 2. The signing key is published in this repository
 
@@ -328,7 +363,7 @@ The identity hash taken from a government ID is stored but **never returned by a
 |---|---|
 | `README.md` | This file — what it is, how to run it, what to look at |
 | `Backend/API.md` | Every endpoint, what it returns, and what each failure means |
-| `Backend/smoke.sh` | The 93-check test script |
+| `Backend/smoke.sh` | The 100-check test script |
 | `Backend/app/` | The code |
 
 Inside `Backend/app/`: `routers/` receive requests, `services/` hold the rules, `repositories/` are the only code that touches storage, and `store/` holds the in-memory data and the seed. A request goes router → service → repository and never skips a layer.

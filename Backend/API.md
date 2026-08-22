@@ -8,25 +8,49 @@ For an explanation of what the system *is*, see [the README](../README.md). This
 
 ---
 
-## Before you start
+## Log in first
 
-**Roles.** Most endpoints want a role header. Leave it off and you are treated as `admin`, which passes every check.
+**Every endpoint needs a token.** The only exceptions are `POST /auth/login` and `GET /health`.
 
-```powershell
--Headers @{ "X-Role" = "guard" }
+| Endpoint | What it does | Returns | If it fails |
+|---|---|---|---|
+| `POST /auth/login` | Exchange a username and password for a token | `200` + `{token, role, name, username, expires_at}` | `401` wrong username **or** password — the message is identical for both, so it never reveals which accounts exist |
+| `POST /auth/logout` | Invalidate the token you are calling with | `200` + `{logged_out: true}` | `401` no or bad token |
+| `GET /auth/me` | Who the token says you are | `200` + `{id, username, name, role}` | `401` |
+
+Four fixed accounts, one per role:
+
+| Username | Password | Role |
+|---|---|---|
+| `guard` | `guard123` | `guard` |
+| `faculty` | `faculty123` | `faculty` |
+| `security` | `security123` | `security` |
+| `admin` | `admin123` | `admin` |
+
+Send the token on every other request:
+
+```
+Authorization: Bearer <token>
 ```
 
-**Status codes.** There are only six things that come back.
+Tokens last **12 hours**, survive `/dev/reset`, and run on real wall-clock time — `/dev/advance-clock` moves the campus clock a day forward without logging you out.
+
+`admin` satisfies every role check. The old `X-Role` header does nothing at all; sending it gets you a `401` like sending nothing.
+
+**Status codes.** There are only seven things that come back.
 
 | Code | Meaning | Usually because |
 |---|---|---|
 | `200` | Fine | — |
 | `201` | Created | Only `POST /visitors` and `POST /visits` |
 | `400` | Your request broke a rule | `InvalidRequest`, `CompanionLimitExceeded` |
-| `403` | Wrong role | `NotPermitted` |
+| `401` | We don't know who you are | `NotAuthenticated` — no token, unknown token, expired token |
+| `403` | We know, and you may not | `NotPermitted` — valid token, wrong role |
 | `404` | No such record | `NotFound` |
 | `409` | Right request, wrong moment | `IllegalTransition`, `VisitorAlreadyInside` |
 | `422` | Body is malformed | Missing field, or a timestamp with no timezone |
+
+**401 and 403 mean different things** and it is worth keeping them apart when debugging: `401` is a login problem, `403` is a permissions problem. If you get `401` on something that worked a minute ago, your token expired or someone reset the server.
 
 **Every error looks like this**, so you can always find out what happened:
 
@@ -41,6 +65,8 @@ For an explanation of what the system *is*, see [the README](../README.md). This
 ```
 
 The one exception is `422`, which keeps the framework's own format.
+
+**Two things are true of every table below.** Each endpoint also returns `401` without a valid token — it is left out of the failure columns rather than repeated thirty times. And a Role of **any** means any logged-in caller, not "no login needed".
 
 **Scans never return an error for a refusal.** A forged pass, a revoked pass or somebody already inside all come back as `200` with a boolean saying no. This is on purpose: every scan attempt has to reach the permanent record, and an error status invites the caller to drop the request before it is written. Check `admitted` / `ok` / `exited`, not the status code.
 
@@ -159,11 +185,11 @@ Zone **ids** (`z_2`) go in request bodies. Zone **codes** (`LIB`) go in scan bod
 
 ## For demonstrating only
 
-None of these would exist in a real deployment.
+None of these would exist in a real deployment. All except `/dev/notifications` and `/dev/whoami` require the `admin` role.
 
 | Endpoint | What it does | Returns |
 |---|---|---|
-| `POST /dev/reset` | Wipe and reload the starting campus, clock included | `200` + record counts |
+| `POST /dev/reset` | Wipe and reload the starting campus, clock included. **Sessions survive** | `200` + record counts |
 | `POST /dev/advance-clock` | Jump time forward by `{"minutes": N}` | `200` + the new time |
 | `POST /dev/transition` | Force a visit into any state | `200`, or `409` if the move is illegal |
 | `GET /dev/notifications` | Every message the system would have sent | `200` + a list |
@@ -173,7 +199,7 @@ None of these would exist in a real deployment.
 
 ---
 
-## Three PowerShell traps
+## Four PowerShell traps
 
 Windows PowerShell will bite you in three specific ways here. All three cost real time to work out from scratch.
 
@@ -184,18 +210,25 @@ Windows PowerShell will bite you in three specific ways here. All three cost rea
 **3. Piping `Invoke-RestMethod` straight into `Select-Object` prints one empty row.** It hands the whole list over as a single item. Assign it first:
 
 ```powershell
-$rows = Invoke-RestMethod "$B/dashboard/inside" -Headers @{ "X-Role" = "security" }
+$rows = Invoke-RestMethod "$B/dashboard/inside" -Headers $security   # $security from a login
 $rows | Select-Object visitor_name, minutes_inside | Format-Table
 ```
 
-**Building a scan body**, avoiding all three:
+**4. Every nested call needs the token too.** `(Invoke-RestMethod "$B/passes/v_3")` inside a larger command is a request in its own right, and it will `401` on you while the outer call looks fine.
+
+**Building a scan body**, avoiding all four:
 
 ```powershell
 $B = "http://127.0.0.1:8000"
-$qr = (Invoke-RestMethod "$B/passes/v_3").qr
+
+$body  = @{ username = "guard"; password = "guard123" } | ConvertTo-Json
+$token = (Invoke-RestMethod -Method Post "$B/auth/login" -ContentType application/json -Body $body).token
+$guard = @{ Authorization = "Bearer $token" }
+
+$qr = (Invoke-RestMethod "$B/passes/v_3" -Headers $guard).qr
 $json = @{ payload = $qr.payload; signature = $qr.signature; person_count_in = 3 } | ConvertTo-Json -Depth 5
 Invoke-RestMethod -Method Post "$B/scans/gate/entry" -ContentType application/json `
-  -Headers @{ "X-Role" = "guard" } -Body $json
+  -Headers $guard -Body $json
 ```
 
 ---

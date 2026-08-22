@@ -27,7 +27,7 @@ def now() -> datetime:
 def now_local() -> datetime:
     """now() converted into LOCAL_TZ. For display and for "today" comparisons.
 
-    Same instant as now(), different presentation.7 evaluates
+    Same instant as now(), different presentation. WORKING_HOURS evaluates
     WORKING_HOURS and every "today" rule in LOCAL_TZ, never in UTC.
     """
     return now().astimezone(ZoneInfo(LOCAL_TZ))

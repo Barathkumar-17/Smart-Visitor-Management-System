@@ -10,7 +10,7 @@ state machine enforces that by raising IllegalTransition.
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.security import require_role
+from app.core.security import require_role, require_user
 from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
     ApproveRequest,
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 
 
 @router.post("", response_model=VisitOut, status_code=201)
-async def create_visit(body: VisitCreate):
+async def create_visit(body: VisitCreate, _user=Depends(require_user())):
     """Pre-registered pass request. Status `requested`.
 
     Returns 409 VisitorAlreadyInside when the visitor is inside on another
@@ -61,7 +61,7 @@ async def list_visits(
 
 
 @router.get("/{visit_id}", response_model=VisitDetail)
-async def get_visit(visit_id: str):
+async def get_visit(visit_id: str, _user=Depends(require_user())):
     """One visit, with everyone linked to it."""
     visit = visit_service.get_visit(visit_id)
     detail = VisitDetail.model_validate(visit)
@@ -70,7 +70,7 @@ async def get_visit(visit_id: str):
 
 
 @router.get("/{visit_id}/scans", response_model=list[ScanEventOut])
-async def get_visit_scans(visit_id: str):
+async def get_visit_scans(visit_id: str, _user=Depends(require_user())):
     """The audit trail for one visit.
 
     Empty until Phase 6 writes the first ScanEvent. It is exposed now because

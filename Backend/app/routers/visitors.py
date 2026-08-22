@@ -6,13 +6,14 @@ literal string "lookup" as a visitor id, and the endpoint becomes permanently
 unreachable while still appearing in the schema - a bug that looks like a
 missing feature.
 
-GET /photos/{ref} lives here too, on its own prefix-free router.5 puts it "alongside registration", and the design fixes the router
+GET /photos/{ref} lives here too, on its own prefix-free router. It belongs
+alongside registration, and the router
 file list, so it gets a second APIRouter rather than a new module.
 """
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.security import require_role
+from app.core.security import require_role, require_user
 from app.integrations import storage
 from app.schemas.visitor import (
     OtpSendResponse,
@@ -30,7 +31,7 @@ photos_router = APIRouter(tags=["photos"])
 
 
 @router.post("", response_model=VisitorOut, status_code=201)
-async def register_visitor(body: VisitorCreate):
+async def register_visitor(body: VisitorCreate, _user=Depends(require_user())):
     """Register a visitor. Creates tier `temporary`.
 
     Verification is a separate step: DigiLocker below, or a host vouch at
@@ -60,7 +61,7 @@ async def lookup_visitor(
 
 
 @router.post("/{visitor_id}/otp/send", response_model=OtpSendResponse)
-async def send_otp(visitor_id: str):
+async def send_otp(visitor_id: str, _user=Depends(require_user())):
     """Send an OTP to the visitor's phone."""
     visitor = visitor_service.get_visitor(visitor_id)
     code = visitor_service.send_otp(visitor_id)
@@ -68,14 +69,16 @@ async def send_otp(visitor_id: str):
 
 
 @router.post("/{visitor_id}/otp/verify", response_model=VisitorOut)
-async def verify_otp(visitor_id: str, body: OtpVerifyRequest):
+async def verify_otp(
+    visitor_id: str, body: OtpVerifyRequest, _user=Depends(require_user())
+):
     """Set phone_verified. Verifies the PHONE, not the person - it does not
     change tier."""
     return visitor_service.verify_otp(visitor_id, body.code)
 
 
 @router.post("/{visitor_id}/digilocker", response_model=VisitorOut)
-async def verify_digilocker(visitor_id: str):
+async def verify_digilocker(visitor_id: str, _user=Depends(require_user())):
     """DigiLocker consent stub. Sets verified and permanent, and OVERRIDES ANY
     EXISTING VOUCH.
 
@@ -86,13 +89,13 @@ async def verify_digilocker(visitor_id: str):
 
 
 @router.get("/{visitor_id}", response_model=VisitorOut)
-async def get_visitor(visitor_id: str):
+async def get_visitor(visitor_id: str, _user=Depends(require_user())):
     """One visitor. NEVER returns id_hash - see VisitorOut."""
     return visitor_service.get_visitor(visitor_id)
 
 
 @photos_router.get("/photos/{ref}", response_model=PhotoOut)
-async def get_photo(ref: str):
+async def get_photo(ref: str, _user=Depends(require_user())):
     """The pixels for a photo ref.
 
     No role marker, so any caller may fetch one - the guard's screen has to get

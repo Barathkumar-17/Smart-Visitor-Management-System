@@ -229,3 +229,24 @@ class Notification:
     recipient: str
     message: str
     created_at: datetime = field(default_factory=clock.now)
+
+
+@dataclass
+class User:
+    """A staff account that can log in.
+
+    Four of these exist and no endpoint creates more - there is no sign-up, no
+    password reset and no user administration. That is the whole point: the
+    accounts are fixtures for a demonstration, not a user management system.
+
+    The password is stored as a PBKDF2 hash with a per-user salt, never as
+    plain text. That costs nothing and means a screenshot of the store does not
+    hand over the accounts.
+    """
+
+    id: str
+    username: str
+    role: str
+    name: str
+    salt: str
+    password_hash: str

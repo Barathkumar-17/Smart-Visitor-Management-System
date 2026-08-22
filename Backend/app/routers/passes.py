@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.core.security import require_role
+from app.core.security import require_role, require_user
 from app.schemas.pass_ import PassOut
 from app.services import pass_service
 
@@ -25,7 +25,7 @@ def _to_out(issued) -> PassOut:
 
 
 @router.get("/{visit_id}", response_model=PassOut)
-async def get_pass(visit_id: str):
+async def get_pass(visit_id: str, _user=Depends(require_user())):
     """The signed payload ready for QR encoding, plus code6.
 
     The same visit returns a BYTE-IDENTICAL qr object every time, including

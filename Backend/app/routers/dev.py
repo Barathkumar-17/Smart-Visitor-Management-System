@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.core import clock
-from app.core.security import require_role
+from app.core.security import require_role, require_user
 from app.repositories import (
     host_repo,
     notification_repo,
@@ -48,7 +48,7 @@ class TransitionRequest(BaseModel):
 
 
 @router.post("/reset")
-async def reset() -> dict[str, Any]:
+async def reset(_user=Depends(require_role("admin"))) -> dict[str, Any]:
     """Clear the store and reseed it, and put the clock offset back to zero.
 
     Step 0 of every manual test script from Phase 1 onward, so a failed test
@@ -74,7 +74,9 @@ async def reset() -> dict[str, Any]:
 
 
 @router.post("/advance-clock")
-async def advance_clock(body: AdvanceClockRequest) -> dict[str, Any]:
+async def advance_clock(
+    body: AdvanceClockRequest, _user=Depends(require_role("admin"))
+) -> dict[str, Any]:
     """Shift the module-level offset in core/clock.py.
 
     Lets a demo trigger escalation and overstay instantly instead of waiting 30
@@ -93,7 +95,9 @@ async def advance_clock(body: AdvanceClockRequest) -> dict[str, Any]:
 
 
 @router.post("/transition")
-async def force_transition(body: TransitionRequest) -> dict[str, Any]:
+async def force_transition(
+    body: TransitionRequest, _user=Depends(require_role("admin"))
+) -> dict[str, Any]:
     """Drive the state machine directly.
 
     Exists so the machine is testable at Phase 2, before any real endpoint
@@ -118,7 +122,7 @@ async def force_transition(body: TransitionRequest) -> dict[str, Any]:
 
 
 @router.get("/notifications")
-async def list_notifications() -> dict[str, Any]:
+async def list_notifications(_user=Depends(require_user())) -> dict[str, Any]:
     """Everything the notification stub "sent".
 
     The stub logs and appends rather than delivering, so this is how a demo
@@ -141,8 +145,9 @@ async def list_notifications() -> dict[str, Any]:
 
 
 @router.get("/whoami")
-async def whoami(user: dict[str, Any] = Depends(require_role("guard"))) -> dict[str, Any]:
-    """Role-guarded probe so the 403 path stays verifiable without a real
-    guard-only endpoint. Requires the guard role; an absent X-Role resolves to
-    admin and is permitted."""
+async def whoami(user: dict[str, Any] = Depends(require_user())) -> dict[str, Any]:
+    """Whoever the token belongs to, wrapped for the dev tools.
+
+    GET /auth/me returns the same thing and is the one to use; this predates it
+    and stays because scripts point at it."""
     return {"user": user}

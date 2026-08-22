@@ -356,7 +356,7 @@ def zone_scan(
     checked, because the design says revoking prevents future ENTRY scans
     and does not eject anyone already inside. The pass window is not checked
     either: the design's zone block decides exactly two outcomes and
-    the design's list adds one more, and inventing an `expired` result would
+    the decided list adds one more, and inventing an `expired` result would
     turn every checkpoint into an alarm for a visitor whose overstay the
     dashboard already reports.
     """

@@ -1,80 +1,173 @@
-"""Role resolution. The design (stubs) and 16.1.
+"""Authentication and role checks.
 
-Real JWT later replaces the header read and nothing else - but see the warning
-on require_role before assuming that is the whole job.
+HOW A CALLER IS IDENTIFIED. They post a username and password to
+POST /auth/login, get a token back, and send it on every later request as
+`Authorization: Bearer <token>`. No token, an unknown token or an expired one
+is 401. A valid token whose role does not cover the endpoint is 403.
+
+There is no way to claim a role without proving it. The previous version of
+this file read an `X-Role` header and believed whatever it said, which meant an
+unauthenticated caller could reach every endpoint in the system. That header is
+gone and is not accepted in any form.
+
+WHAT IS STILL A SHORTCUT, and it is a real one: the four accounts and their
+passwords are written into the seed, so anyone reading this repository knows
+every credential. That is deliberate for something meant to be run and
+demonstrated in a minute, and it is exactly what has to change first if this is
+ever deployed. Hashing the stored passwords does not fix it - the plain text is
+in seed.py either way.
+
+`admin` satisfies every role check. With real authentication behind it that is
+ordinary superuser behaviour rather than the hole it used to be, because the
+caller now has to prove they are the admin.
 """
 
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import Header
 
-from app.core.errors import NotPermitted
+from app.core.errors import NotAuthenticated, NotPermitted
 
-# Hardcoded users returned per role, so approved_by and the transition() actor
-# string are stable across a demo.
-#
-# `faculty` resolves to "Faculty User" here. Where a faculty endpoint acts on a
-# specific visit, the acting host is the visit's host_id - the header
-# establishes the ROLE, the path establishes the IDENTITY. There is no per-host
-# authentication in this build.
-USERS: dict[str, dict[str, str]] = {
-    "guard": {"id": "u_guard", "name": "Gate Guard", "role": "guard"},
-    "faculty": {"id": "u_faculty", "name": "Faculty User", "role": "faculty"},
-    "security": {"id": "u_security", "name": "Security Desk", "role": "security"},
-    "admin": {"id": "u_admin", "name": "Admin Block", "role": "admin"},
-    "visitor": {"id": "u_visitor", "name": "Visitor", "role": "visitor"},
-}
-
-VALID_ROLES = frozenset(USERS)
+# How long a token stays valid. Long enough that a demonstration never has to
+# stop and log in again, short enough that it is not effectively forever.
+TOKEN_LIFETIME = timedelta(hours=12)
 
 
-# ---------------------------------------------------------------------------
-# PRODUCTION BLOCKER - DO NOT SHIP THIS.
-#
-# `admin` satisfies every role check, including guard-only and faculty-only
-# endpoints, and an ABSENT X-Role header is treated as `admin`. Together these
-# mean ANY UNAUTHENTICATED CALLER CAN REACH EVERY ENDPOINT IN THIS SYSTEM.
-#
-# This is deliberate for a prototype: it makes every endpoint callable with no
-# header during early phases and manual testing. Real deployment must change
-# this BEHAVIOUR, not merely swap the header read for a JWT verify. Replacing
-# the header with a token while leaving the admin-satisfies-everything rule in
-# place fixes nothing.
-#
-# the design.
-# ---------------------------------------------------------------------------
+def session_now() -> datetime:
+    """REAL wall-clock time, deliberately NOT core.clock.
+
+    Everything else in this system reads core.clock, which /dev/advance-clock
+    can shift by hours to demonstrate overstays and expiring passes. Sessions
+    must not move with it: jumping the campus clock a day forward to show an
+    overstay would otherwise log everybody out mid-demonstration, which is both
+    confusing and nothing to do with what was being shown.
+
+    A login is a real event in the real world. The campus clock is a fiction
+    for the visit rules, and this is the one place that fiction must not reach.
+    """
+    return datetime.now(timezone.utc)
+
+
+# PBKDF2 rounds. Deliberately modest: this is a prototype logging four fixed
+# accounts in, not a service defending a password database.
+_PBKDF2_ROUNDS = 120_000
+
+ROLES = ("guard", "faculty", "security", "admin")
+
+
+def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
+    """Return (salt, hash). A fresh random salt unless one is supplied.
+
+    Passwords are never stored or compared in plain text, even here. It costs
+    two lines and means the store can be dumped without handing over accounts.
+    """
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), _PBKDF2_ROUNDS
+    )
+    return salt, digest.hex()
+
+
+def verify_password(password: str, salt: str, expected_hash: str) -> bool:
+    """Constant-time comparison, so a wrong password cannot be found one
+    character at a time by measuring how long the answer takes."""
+    _, actual = hash_password(password, salt)
+    return hmac.compare_digest(actual, expected_hash)
+
+
+def new_token() -> str:
+    """A random opaque token. Not a JWT and carries no claims - the session
+    record is the source of truth, so revoking one is a dict delete."""
+    return secrets.token_urlsafe(32)
+
+
+def _token_from_header(authorization: str | None) -> str:
+    if not authorization:
+        raise NotAuthenticated(
+            "No credentials. Log in at POST /auth/login and send the token as "
+            "'Authorization: Bearer <token>'.",
+            {"header": "Authorization"},
+        )
+
+    parts = authorization.split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise NotAuthenticated(
+            "Authorization header must read 'Bearer <token>'.",
+            {"received": authorization[:20]},
+        )
+    return parts[1].strip()
+
+
+def resolve_token(authorization: str | None) -> dict[str, Any]:
+    """Turn an Authorization header into the caller, or raise 401.
+
+    Imported inside the function to keep the import graph one-way: repositories
+    never import core, and core is imported by everything.
+    """
+    from app.repositories import user_repo
+
+    token = _token_from_header(authorization)
+    session = user_repo.get_session(token)
+
+    if session is None:
+        raise NotAuthenticated("Unknown or expired token. Log in again.", {})
+
+    if session["expires_at"] <= session_now():
+        user_repo.delete_session(token)
+        raise NotAuthenticated(
+            "Token expired. Log in again.",
+            {"expired_at": session["expires_at"].isoformat()},
+        )
+
+    user = user_repo.get(session["user_id"])
+    if user is None:
+        # The store was reset under a live token.
+        user_repo.delete_session(token)
+        raise NotAuthenticated("The account for this token no longer exists.", {})
+
+    return {"id": user.id, "name": user.name, "role": user.role, "username": user.username}
+
+
+def require_user():
+    """Any logged-in caller. Used where the endpoint has no role restriction
+    but still must not be open to the world."""
+
+    async def dependency(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        return resolve_token(authorization)
+
+    return dependency
+
+
 def require_role(*roles: str):
-    """FastAPI dependency resolving the caller from the X-Role header.
+    """A logged-in caller holding one of `roles`.
 
-    | X-Role header              | Result                |
-    |----------------------------|-----------------------|
-    | absent                     | role `admin`          |
-    | present, in required set   | that role             |
-    | present, `admin`           | permitted             |
-    | present, not in the set    | NotPermitted (403)    |
+    | Situation                       | Result               |
+    |---------------------------------|----------------------|
+    | no Authorization header         | NotAuthenticated 401 |
+    | unknown or expired token        | NotAuthenticated 401 |
+    | valid token, role in the set    | permitted            |
+    | valid token, role `admin`       | permitted            |
+    | valid token, role not in the set| NotPermitted 403     |
 
-    Called with no roles, it accepts anyone including an absent header.
+    Where a faculty endpoint acts on a specific visit, the ACTING host is still
+    the visit's host_id rather than the logged-in user. Logging in proves the
+    role; the path establishes which host. Tying the two together needs a user
+    account per host, which four fixed accounts cannot express.
     """
 
-    async def dependency(x_role: str | None = Header(default=None)) -> dict[str, Any]:
-        # Absent header is admin, per the table above.
-        if x_role is None:
-            return USERS["admin"]
+    async def dependency(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        user = resolve_token(authorization)
 
-        role = x_role.strip().lower()
-        if role not in VALID_ROLES:
-            raise NotPermitted(
-                f"Unknown role '{x_role}'",
-                {"role": x_role, "valid_roles": sorted(VALID_ROLES)},
-            )
-
-        # admin satisfies every check - see the production blocker above.
-        if role == "admin" or not roles or role in roles:
-            return USERS[role]
+        if user["role"] == "admin" or not roles or user["role"] in roles:
+            return user
 
         raise NotPermitted(
-            f"Role '{role}' may not call this endpoint",
-            {"role": role, "required": sorted(roles)},
+            f"Role '{user['role']}' may not call this endpoint",
+            {"role": user["role"], "required": sorted(roles)},
         )
 
     return dependency

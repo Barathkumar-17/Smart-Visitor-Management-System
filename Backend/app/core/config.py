@@ -64,7 +64,7 @@ VOUCH_VALIDITY_DAYS = 100
 # Counts companions ONLY, excluding the accountable visitor.
 MAX_LINKED_COMPANIONS = 4
 
-# Decoded photo size cap.5 fixes it at 2 MB: the store is a
+# Decoded photo size cap, fixed at 2 MB: the store is a
 # dict in RAM, and an uncapped field turns a demo into an OOM.
 MAX_PHOTO_BYTES = 2 * 1024 * 1024
 

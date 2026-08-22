@@ -50,8 +50,19 @@ class CompanionLimitExceeded(DomainError):
     status_code = 400
 
 
+class NotAuthenticated(DomainError):
+    """No token, an unknown token, or an expired one.
+
+    Distinct from NotPermitted: this means we do not know WHO you are, not that
+    we know and you may not. Conflating the two makes a login bug look like a
+    permissions bug.
+    """
+
+    status_code = 401
+
+
 class NotPermitted(DomainError):
-    """require_role rejected the caller."""
+    """A known caller whose role does not cover this endpoint."""
 
     status_code = 403
 

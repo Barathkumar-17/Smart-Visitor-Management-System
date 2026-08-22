@@ -24,13 +24,14 @@ import zlib
 from contextlib import contextmanager
 from datetime import timedelta
 
-from app.core import clock
+from app.core import clock, security
 from app.core.config import RESTRICTED_VISIT_DURATION
 from app.integrations import notifications, storage
 from app.repositories import (
     companion_repo,
     pass_repo,
     host_repo,
+    user_repo,
     visit_repo,
     visitor_repo,
     zone_repo,
@@ -38,7 +39,7 @@ from app.repositories import (
 from app.services import pass_service, scan_service, visitor_service
 from app.services.visit_service import transition
 from app.store import ids, memory
-from app.store.entities import Companion, Host, Visit, Visitor, Zone
+from app.store.entities import Companion, Host, User, Visit, Visitor, Zone
 
 
 def _placeholder_photo(rgb: tuple[int, int, int]) -> str:
@@ -535,8 +536,42 @@ def _seed_visitors_d_e_f(hosts: list[Host], zones_by_code: dict[str, Zone]) -> N
         scan_service._record(visit_f.id, "zone", "ok", zone_id=main.id)
 
 
+# The four accounts, and the only ones that will ever exist. Ids are FIXED
+# rather than generated, because they already appear inside actor strings on
+# every transition and in approved_by on seeded visits - "security:u_security"
+# has to keep meaning the same account across a reset.
+#
+# The passwords are in plain sight here. That is the documented shortcut: this
+# runs as a demonstration in under a minute, and a credential store is not what
+# it is demonstrating. Stored hashed, so a dump of the store gives nothing, but
+# anyone reading this file has all four.
+DEMO_ACCOUNTS = [
+    ("u_guard", "guard", "guard", "Gate Guard", "guard123"),
+    ("u_faculty", "faculty", "faculty", "Faculty User", "faculty123"),
+    ("u_security", "security", "security", "Security Desk", "security123"),
+    ("u_admin", "admin", "admin", "Admin Block", "admin123"),
+]
+
+
+def _seed_users() -> None:
+    """Create the four demonstration accounts."""
+    for user_id, username, role, name, password in DEMO_ACCOUNTS:
+        salt, password_hash = security.hash_password(password)
+        user_repo.save(
+            User(
+                id=user_id,
+                username=username,
+                role=role,
+                name=name,
+                salt=salt,
+                password_hash=password_hash,
+            )
+        )
+
+
 def load() -> None:
     """Populate an empty store. Called at startup and by /dev/reset."""
+    _seed_users()
     zones_by_code = _seed_zones()
     hosts = _seed_hosts()
     _seed_visitor_a(hosts)

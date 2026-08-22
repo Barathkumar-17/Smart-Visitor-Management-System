@@ -15,7 +15,16 @@ from fastapi import FastAPI
 from app.core import clock
 from app.core.config import DEFAULT_HMAC_SECRET_IN_USE
 from app.core.errors import DomainError, domain_error_handler
-from app.routers import dashboard, dev, passes, reference, scans, visitors, visits
+from app.routers import (
+    auth,
+    dashboard,
+    dev,
+    passes,
+    reference,
+    scans,
+    visitors,
+    visits,
+)
 from app.store import seed
 
 # The state machine writes one audit line per status change, naming the actor
@@ -56,6 +65,7 @@ app = FastAPI(
 # on the base class so every subclass in core/errors.py routes through it.
 app.add_exception_handler(DomainError, domain_error_handler)
 
+app.include_router(auth.router)
 app.include_router(reference.router)
 app.include_router(visitors.router)
 app.include_router(visitors.photos_router)

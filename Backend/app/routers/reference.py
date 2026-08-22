@@ -7,7 +7,9 @@ permits this: what it forbids in a router is business LOGIC, and it explicitly
 contemplates a router reaching storage through a repository.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from app.core.security import require_user
 
 from app.repositories import host_repo, zone_repo
 from app.schemas.common import HostOut, ZoneOut
@@ -16,13 +18,13 @@ router = APIRouter(tags=["reference"])
 
 
 @router.get("/zones", response_model=list[ZoneOut])
-async def list_zones() -> list:
+async def list_zones(_user=Depends(require_user())) -> list:
     """Every checkpoint zone. Zone scans arrive by `code`, not id."""
     return zone_repo.list_all()
 
 
 @router.get("/hosts", response_model=list[HostOut])
-async def list_hosts() -> list:
+async def list_hosts(_user=Depends(require_user())) -> list:
     """Every host, INCLUDING phone, so the guard can call one directly instead
     of waiting on escalation."""
     return host_repo.list_all()
