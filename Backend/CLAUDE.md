@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 1 — Entities & repos
-PHASES_COMPLETE: 0
+NEXT_PHASE: 2 — State machine
+PHASES_COMPLETE: 0,1
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 0 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 1 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -222,3 +222,9 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[0]` Clock reads gained readable output — was ISO aware-UTC only, now `clock.now_local()` and `clock.readable()` alongside it. `/health` and `/dev/advance-clock` return both. The ISO `now` is unchanged and remains canonical per SPEC §16.7; the added fields are display only and must never be parsed. `now_local()` also serves Phase 11's `WORKING_HOURS` check and Phase 13's "today" comparisons.
 - `[0]` `require_role` rejects an unrecognised `X-Role` with `NotPermitted` — SPEC §16.1's table has no row for it. Treating an unknown role as valid would be worse.
 - `[0]` `smoke.sh` preflights `jq` and the server, failing with a readable message instead of a raw curl error.
+- `[1]` Added an eighth dataclass, `Notification` — SPEC §6 lists seven, but §5 requires the notification stub to append to a `notifications` list and `notification_repo.py` needs a shape to store. §6 never named it; nothing there is stale.
+- `[1]` `Visitor.tier` is a derived property, not a stored field — §6 lists it as a field *and* requires computing it everywhere. A property satisfies both and makes a stale tier unreadable.
+- `[1]` `reference.py` reads through repositories with no service layer — `/zones` and `/hosts` have no business rules, and §15 explicitly contemplates a router reaching storage through a repository. `/visitors/{id}` does go through `visitor_service`, which Phase 3 fills.
+- `[1]` Seeded visitors carry `photo_ref = null` — setting one needs the Phase 3 storage stub, and a literal ref would be a dangling pointer that `GET /photos/{ref}` would 404 on. **SPEC §13's staging table names Phases 1, 5 and 6 only; the seed also needs extending at Phase 3.**
+- `[1]` Seeded visitor A's `id_hash`/`id_last4` are set directly, though the DigiLocker stub is Phase 3 — CLAUDE.md requires A at Phase 1 and §13 defines her as DigiLocker-verified. Inert data, unlike a photo ref, which would be a broken link.
+- `[1]` Seeded ids are deterministic across `/dev/reset` — counters reset before reseeding, so z_1..z_5, h_1..h_3, vr_1, vr_2, v_1, v_2 are stable. Test scripts depend on it.
