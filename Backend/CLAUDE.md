@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 6 — Gate entry
-PHASES_COMPLETE: 0,1,2,3,4,5
+NEXT_PHASE: 8 — Arrival ack
+PHASES_COMPLETE: 0,1,2,3,4,5,6
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 5 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 6 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -254,3 +254,8 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[5]` Visitor B's seed runs through the real `apply_vouch`, `transition` and `issue_pass` rather than being written by hand — §13 requires that of scan events, and the same reasoning applies to her pass.
 - `[5]` `smoke.sh` rewritten rather than appended: seeding B claims `vr_3`/`v_3` so every later id shifted, and the Phase 3 vouch step used the now-deleted `/dev/vouch`. The vouch and DigiLocker-override assertions moved into the Phase 4 block, where `approve` provides them properly.
 - `[5]` README gained Running, What is built, Security and Documents sections; the two production blockers (open auth, default HMAC secret) are written up there in full.
+- `[6]` Seeded entries for C, D, E and F run through the real `gate_entry` with the clock temporarily rewound, restored in a `finally`. Setting `entry_at` by hand would mean seeded records did not come from the live code path, which §13 forbids.
+- `[6]` E's and F's zone events call `scan_service._record()` — the shared writer both live paths use. The logic that DECIDES `wrong_zone` arrives with the endpoint at Phase 9; splitting it there keeps Phase 9's rule out of Phase 6.
+- `[6]` The gate window check is skipped when `valid_from`/`valid_to` are null — a visit forced to `issued` through `/dev/transition` never went through approve and has no window to violate.
+- `[6]` `vehicle_plate_in` is overwritten with the plate that ACTUALLY arrived, so Phase 10's exit compares against what entered. The declared plate is captured first for the response and survives on the ScanEvent as `plate_mismatch`.
+- `[6]` Bug found in testing: `vehicle.expected` echoed the presented plate because the record was overwritten before the response was built, so a mismatch displayed two identical values. Fixed by capturing the expected plate first.
