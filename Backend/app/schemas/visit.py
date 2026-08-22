@@ -85,6 +85,29 @@ class ApproveRequest(BaseModel):
     _aware_to = field_validator("valid_to")(_require_aware)
 
 
+class ArrivalAckRequest(BaseModel):
+    """Host confirms availability. SPEC sections 4.4 and 10.
+
+    Both fields are REQUIRED when the visit is restricted and IGNORED
+    otherwise. A restricted visit is always a fallback admission - nothing else
+    in the system sets restricted - so no host ever chose its zones, and there
+    is nothing to restore. The host supplies them here, which is the first
+    moment a host is in the loop on that visit at all.
+    """
+
+    allowed_zones: list[str] | None = Field(
+        default=None, description="Zone ids. Required if the visit is restricted."
+    )
+    valid_to: datetime | None = Field(
+        default=None,
+        description="Extended window end. Required if the visit is restricted. "
+        "Changing it does NOT reissue the QR - the window is not in the signed "
+        "payload (SPEC section 9).",
+    )
+
+    _aware_to = field_validator("valid_to")(_require_aware)
+
+
 class ReasonRequest(BaseModel):
     """Body for reject and cancel. Both take a free-text reason."""
 

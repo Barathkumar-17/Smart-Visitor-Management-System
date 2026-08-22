@@ -14,6 +14,7 @@ from app.core.security import require_role
 from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
     ApproveRequest,
+    ArrivalAckRequest,
     ReasonRequest,
     VisitCreate,
     VisitDetail,
@@ -97,6 +98,26 @@ async def approve_visit(
         valid_from=body.valid_from,
         valid_to=body.valid_to,
         vouch=body.vouch,
+    )
+
+
+@router.post("/{visit_id}/arrival-ack", response_model=VisitOut)
+async def arrival_ack(
+    visit_id: str, body: ArrivalAckRequest, _user=Depends(require_role("faculty"))
+):
+    """The host confirms availability, and lifts a restriction if there is one.
+
+    SPEC sections 4.4 and 10. The visitor is never held at the gate waiting for
+    this - they entered already, and this only decides how far they may go and
+    for how long.
+
+    allowed_zones and valid_to are REQUIRED when the visit is restricted and
+    IGNORED otherwise. Changing valid_to does NOT reissue the QR.
+    """
+    return visit_service.arrival_ack(
+        visit_id=visit_id,
+        allowed_zones=body.allowed_zones,
+        valid_to=body.valid_to,
     )
 
 

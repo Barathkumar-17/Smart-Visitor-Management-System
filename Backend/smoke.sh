@@ -409,4 +409,73 @@ curl -sS "$BASE/visits/v_3/scans" \
   | jq -e 'length >= 1 and any(.[]; .result == "revoked")' > /dev/null
 pass
 
+
+# --- Phase 8: arrival acknowledgement ---------------------------------------
+# v_2 is visitor C, the ONLY restricted visit in this build. Nothing else can
+# produce one - fallback-decision is Phase 12 and deferred - so she is the sole
+# fixture this whole phase runs against.
+
+step "8.0  reset, so C is restricted and unacknowledged again"
+curl -sS -X POST "$BASE/dev/reset" > /dev/null
+curl -sS "$BASE/visits/v_2" \
+  | jq -e '.restricted == true
+           and .host_acked_at == null
+           and (.allowed_zones | length) == 1
+           and .ack_escalation_stage == null' > /dev/null
+pass
+
+step "8.1  a restricted visit refuses an empty acknowledgement (400)"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/visits/v_2/arrival-ack" \
+  -H 'Content-Type: application/json' -H 'X-Role: faculty' -d '{}' \
+  | grep -q '^400$' || { printf 'empty ack on a restricted visit was not refused\n' >&2; exit 1; }
+pass
+
+step "8.2  capture C's QR and code6 BEFORE the acknowledgement"
+QR_BEFORE=$(curl -sS "$BASE/passes/v_2" | jq -cS '.qr')
+C6_BEFORE=$(curl -sS "$BASE/passes/v_2" | jq -r '.code6')
+[ -n "$QR_BEFORE" ] || { printf 'no QR to compare\n' >&2; exit 1; }
+pass
+
+step "8.3  acknowledge with zones and a window -> restriction lifts"
+curl -sS -X POST "$BASE/visits/v_2/arrival-ack" \
+  -H 'Content-Type: application/json' -H 'X-Role: faculty' \
+  -d '{"allowed_zones":["z_2","z_5"],"valid_to":"2026-08-22T21:00:00+05:30"}' \
+  | jq -e '.restricted == false
+           and .host_acked_at != null
+           and (.allowed_zones | length) == 3
+           and (.allowed_zones | index("z_1")) != null' > /dev/null
+pass
+
+step "8.4  THE PROOF - the QR is byte-identical after (SPEC section 9)"
+QR_AFTER=$(curl -sS "$BASE/passes/v_2" | jq -cS '.qr')
+C6_AFTER=$(curl -sS "$BASE/passes/v_2" | jq -r '.code6')
+[ "$QR_BEFORE" = "$QR_AFTER" ] \
+  || { printf 'QR changed when the window and zones changed - it must not\n' >&2; exit 1; }
+[ "$C6_BEFORE" = "$C6_AFTER" ] \
+  || { printf 'code6 changed - the pass was reissued, which it must not be\n' >&2; exit 1; }
+pass
+
+step "8.5  ack_escalation_stage is STILL null - nothing escalates in this build"
+curl -sS "$BASE/visits/v_2" \
+  | jq -e '.ack_escalation_stage == null and .ack_escalated_at == null' > /dev/null
+pass
+
+step "8.6  an unrestricted visit is acknowledged with no body at all"
+curl -sS -X POST "$BASE/visits/v_4/arrival-ack" \
+  -H 'Content-Type: application/json' -H 'X-Role: faculty' -d '{}' \
+  | jq -e '.host_acked_at != null and .restricted == false' > /dev/null
+pass
+
+step "8.7  acknowledging a visit nobody has arrived on is refused"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/visits/v_1/arrival-ack" \
+  -H 'Content-Type: application/json' -H 'X-Role: faculty' -d '{}' \
+  | grep -q '^400$' || { printf 'ack on a non-inside visit was not refused\n' >&2; exit 1; }
+pass
+
+step "8.8  security was told the restriction lifted"
+curl -sS "$BASE/dev/notifications" \
+  | jq -e 'any(.notifications[]; .recipient == "security_desk"
+                                 and (.message | test("Restriction lifted")))' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'

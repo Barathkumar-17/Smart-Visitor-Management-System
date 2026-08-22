@@ -15,6 +15,7 @@ import logging
 from datetime import date as _date
 from zoneinfo import ZoneInfo
 
+from app.core import clock
 from app.core.config import LOCAL_TZ, MAX_LINKED_COMPANIONS
 from app.core.errors import (
     CompanionLimitExceeded,
@@ -418,4 +419,108 @@ def cancel_visit(visit_id: str, reason: str) -> Visit:
 
     visitor = visitor_repo.get_or_404(visit.visitor_id)
     notifications.notify_visitor(visitor, f"Visit {visit.id} was cancelled: {reason}")
+    return visit
+
+
+def arrival_ack(
+    visit_id: str,
+    allowed_zones: list[str] | None = None,
+    valid_to=None,
+) -> Visit:
+    """The host confirms they are available. SPEC sections 4.4 and 10.
+
+    Sets host_acked_at, and for a restricted visit ALSO lifts the restriction.
+
+    WHY A RESTRICTED VISIT NEEDS ZONES HERE. Only fallback-decision ever sets
+    restricted = True, and a fallback admission grants the meeting point alone
+    on a short window because nobody who knows the visitor was reachable. So
+    there are no host-chosen zones to restore - no host ever chose any. This
+    call is the first moment a host is in the loop on that visit, so the host
+    supplies the zones and the window now. Omitting either is InvalidRequest.
+
+    THE QR IS NOT REISSUED, and cannot be. Neither the zone list nor valid_to
+    is in the signed payload (SPEC section 9), so both are read fresh from this
+    record at the next scan. The visitor's QR is byte-identical before and
+    after this call - the pass is a pointer, not a copy.
+
+    NOTHING ESCALATES IF THIS IS NEVER CALLED. The chasing job is Phase 11 and
+    deferred, so ack_escalation_stage stays null for the life of this build.
+    That is a documented gap, not an oversight - see CLAUDE.md.
+    """
+    visit = visit_repo.get_or_404(visit_id)
+
+    # Acknowledging ARRIVAL only makes sense once someone has arrived. This is
+    # a domain rule, not a transition: the status does not change here.
+    if visit.status != "inside":
+        raise InvalidRequest(
+            f"Visit {visit.id} is {visit.status}, not inside - there is no "
+            "arrival to acknowledge",
+            {"visit_id": visit.id, "status": visit.status},
+        )
+
+    was_restricted = visit.restricted
+
+    if was_restricted:
+        if not allowed_zones or valid_to is None:
+            raise InvalidRequest(
+                "A restricted visit needs both allowed_zones and valid_to. It was "
+                "admitted by the fallback authority to the meeting point only, so "
+                "there are no host-set zones to restore.",
+                {
+                    "visit_id": visit.id,
+                    "restricted": True,
+                    "allowed_zones_given": bool(allowed_zones),
+                    "valid_to_given": valid_to is not None,
+                },
+            )
+
+        for zone_id in allowed_zones:
+            if zone_repo.get(zone_id) is None:
+                raise InvalidRequest(
+                    f"Unknown zone {zone_id}",
+                    {"zone_id": zone_id, "field": "allowed_zones"},
+                )
+
+        if visit.valid_from and valid_to <= visit.valid_from:
+            raise InvalidRequest(
+                "valid_to must be after the visit started",
+                {
+                    "valid_from": visit.valid_from.isoformat(),
+                    "valid_to": valid_to.isoformat(),
+                },
+            )
+
+        # The meeting point stays reachable, as at approval - a visitor sent
+        # somewhere they may not enter would trip a wrong-zone scan for doing
+        # exactly what they were told.
+        widened = [visit.meeting_zone_id, *allowed_zones] if visit.meeting_zone_id else list(allowed_zones)
+        visit.allowed_zones = list(dict.fromkeys(z for z in widened if z))
+        visit.valid_to = valid_to
+        visit.restricted = False
+
+    visit.host_acked_at = clock.now()
+    visit_repo.save(visit)
+
+    visitor = visitor_repo.get(visit.visitor_id)
+    host = host_repo.get(visit.host_id)
+    if host is not None and visitor is not None:
+        notifications.notify_visitor(
+            visitor, f"{host.name} has confirmed they are available for visit {visit.id}."
+        )
+
+    if was_restricted:
+        notifications.notify_security(
+            f"Restriction lifted on visit {visit.id} by host {visit.host_id}. "
+            f"Zones now {visit.allowed_zones}, window to {visit.valid_to.isoformat()}."
+        )
+        log.info(
+            "visit %s acknowledged and UNRESTRICTED by host %s: zones %s, valid_to %s",
+            visit.id,
+            visit.host_id,
+            visit.allowed_zones,
+            visit.valid_to.isoformat(),
+        )
+    else:
+        log.info("visit %s acknowledged by host %s", visit.id, visit.host_id)
+
     return visit
