@@ -324,6 +324,14 @@ POST   /visits/{id}/close                 role: guard
                                           End-of-day close-out. Body: reason
                                           (`left_without_scanning` | `still_inside` |
                                           `partial_exit` | `system_error`).
+                                          Legal only from `inside`; the state machine
+                                          gives 409 from anywhere else.
+                                          Sets closed_reason and LEAVES exit_at NULL —
+                                          nobody scanned out, which is the whole reason
+                                          this was called. `closed with exit_at null` is
+                                          what the honesty panel counts as closed without
+                                          an exit scan. A normal exit scan is the mirror:
+                                          it sets exit_at and leaves closed_reason null.
 GET    /visits/{id}/scans                 The audit trail.
 ```
 
@@ -352,9 +360,17 @@ POST   /scans/gate/entry                  role: guard
 POST   /scans/gate/exit                   role: guard
        Body: payload+signature OR code6, vehicle_plate_out, person_count_out.
        Photos shown again. Plate compared to entry.
-       count_out == count_in  → inside → closed.
+       count_out == count_in  → inside → closed, exit_at set.
        count_out <  count_in  → visit STAYS `inside`, partial_exit flag raised,
                                 security notified, resolved later by close-out.
+                                exit_at STAYS NULL — people are still on campus,
+                                and §11's overstaying flag keys off exit_at.
+       person_count_out omitted → read as a full exit, as person_count_in is at
+                                the gate. count_in null → compare against
+                                person_count_expected.
+       Revocation and the pass window are NOT checked. §14 says a revoked pass
+       does not eject anyone already inside, and an overstayer is exactly who
+       needs to leave.
 
 POST   /scans/zone
        Body: zone_code, and payload+signature OR code6.

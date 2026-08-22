@@ -160,3 +160,54 @@ class ZoneScanResponse(BaseModel):
     )
 
     scan_event_id: str | None = None
+
+
+class GateExitRequest(BaseModel):
+    """The exit scan. SPEC section 10.
+
+    person_count_out is optional and read as a full exit when omitted, exactly
+    as person_count_in is at the gate. A guard who did not count has not
+    reported a discrepancy, and inventing one from silence would raise a
+    partial-exit alarm over paperwork.
+    """
+
+    payload: QrPayload | None = None
+    signature: str | None = None
+    code6: str | None = None
+
+    vehicle_plate_out: str | None = None
+    person_count_out: int | None = Field(
+        default=None, description="How many the guard actually sees leaving."
+    )
+
+
+class GateExitResponse(BaseModel):
+    """What the barrier screen renders. ALWAYS 200, refusals included.
+
+    `exited` says whether the VISIT closed, which is not the same as whether
+    anyone left: a short count signs some people out and deliberately keeps the
+    visit open, because the rest are still on campus.
+    """
+
+    exited: bool
+    result: str = Field(description="ok | wrong_status | bad_signature")
+    message: str
+
+    people: list[PersonOut] = Field(default_factory=list)
+    vehicle: PlateCheck | None = None
+    headcount: HeadcountCheck | None = Field(
+        default=None, description="`expected` here is what ENTERED, not what was booked."
+    )
+
+    visit_id: str | None = None
+    visitor_name: str | None = None
+    host_name: str | None = None
+
+    partial_exit: bool = False
+    still_inside: int = 0
+    visit_status: str | None = None
+    exit_at: datetime | None = Field(
+        default=None, description="Null on a partial exit - people are still inside."
+    )
+
+    scan_event_id: str | None = None

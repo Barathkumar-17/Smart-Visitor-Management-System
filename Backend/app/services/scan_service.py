@@ -444,3 +444,161 @@ def zone_scan(
         f"{_zone_label(zone)}. Security has been notified.",
         "scan_event_id": event.id,
     }
+
+
+def gate_exit(
+    payload: dict | None = None,
+    signature: str | None = None,
+    code6: str | None = None,
+    vehicle_plate_out: str | None = None,
+    person_count_out: int | None = None,
+) -> dict:
+    """The exit scan. SPEC sections 4.3 and 10. One scan, and it never blocks.
+
+    The photos are shown again and the plate is compared against what actually
+    entered, because the question at the barrier is whether the people and the
+    vehicle leaving are the ones that arrived.
+
+    THE COUNT DECIDES WHETHER THE VISIT CLOSES:
+
+      out == in   -> inside -> closed, exit_at set
+      out <  in   -> the visit STAYS `inside`, security is told, and the
+                     partial_exit flag in SPEC section 11 derives itself from
+                     person_count_out being less than person_count_in. exit_at
+                     is deliberately NOT set - people are still on campus, and
+                     stamping an exit time would silence the overstay flag too.
+                     End-of-day close-out resolves it.
+      out >  in   -> SPEC section 14: record count_mismatch and close normally.
+                     Never block. The count is evidence, not a gate.
+
+    Omitting person_count_out is read as a full exit, exactly as omitting
+    person_count_in at the gate is read as no mismatch. A guard who did not
+    count has not reported a discrepancy.
+
+    TWO CHECKS THIS DOES NOT MAKE. Revocation is not one, because SPEC section
+    14 says in as many words that a revoked pass on a visit already inside does
+    not eject anyone and that exit still works. Neither is the pass window: an
+    overstaying visitor is precisely the person who most needs to be able to
+    leave, and refusing them would strand them inside the record forever.
+    """
+    issued, lookup = pass_service.resolve_scan(payload, signature, code6)
+
+    if lookup in ("bad_signature", "not_found"):
+        log.warning("gate exit rejected: pass did not resolve (%s)", lookup)
+        return {
+            "exited": False,
+            "result": "bad_signature",
+            "message": "No active pass matches this code or payload.",
+            "visit_status": None,
+        }
+
+    visit = visit_repo.get_or_404(issued.visit_id)
+    visitor = visitor_repo.get(visit.visitor_id)
+    host = host_repo.get(visit.host_id)
+
+    if visit.status != "inside":
+        event = _record(
+            visit.id, "exit", "wrong_status", person_count_recorded=person_count_out
+        )
+        return {
+            "exited": False,
+            "result": "wrong_status",
+            "message": f"Visit {visit.id} is {visit.status}, not inside. "
+            "There is nobody to sign out.",
+            "people": _people_for(visit),
+            "visit_id": visit.id,
+            "visitor_name": visitor.name if visitor else None,
+            "visit_status": visit.status,
+            "scan_event_id": event.id,
+        }
+
+    # What ACTUALLY entered, not what was declared weeks ago - the gate stores
+    # the arriving plate for exactly this comparison. Falls back to the
+    # expected group size when the guard took no count on the way in.
+    expected_plate = visit.vehicle_plate_in
+    baseline = (
+        visit.person_count_in
+        if visit.person_count_in is not None
+        else visit.person_count_expected
+    )
+
+    plate_mismatch = bool(
+        vehicle_plate_out and expected_plate and vehicle_plate_out != expected_plate
+    )
+    short = person_count_out is not None and person_count_out < baseline
+    count_mismatch = person_count_out is not None and person_count_out != baseline
+
+    visit.vehicle_plate_out = vehicle_plate_out
+    visit.person_count_out = person_count_out
+
+    if short:
+        # Stays inside. No exit_at: see the docstring - the overstay flag in
+        # SPEC section 11 keys off exit_at being null, and some of this group
+        # is still on campus.
+        visit_repo.save(visit)
+        event = _record(
+            visit.id,
+            "exit",
+            "ok",
+            plate_mismatch=plate_mismatch,
+            count_mismatch=True,
+            person_count_recorded=person_count_out,
+        )
+        notifications.notify_security(
+            f"Partial exit on visit {visit.id}: {person_count_out} of {baseline} left. "
+            f"{baseline - person_count_out} still inside. Resolve at close-out."
+        )
+        message = (
+            f"{person_count_out} of {baseline} signed out. "
+            f"{baseline - person_count_out} still inside - the visit stays open."
+        )
+    else:
+        visit_service.transition(visit, "closed", "guard:u_guard")
+        visit.exit_at = clock.now()
+        visit_repo.save(visit)
+        event = _record(
+            visit.id,
+            "exit",
+            "ok",
+            plate_mismatch=plate_mismatch,
+            count_mismatch=count_mismatch,
+            person_count_recorded=person_count_out,
+        )
+        if host is not None and visitor is not None:
+            notifications.notify_host(
+                host, f"{visitor.name} has signed out. Visit {visit.id} is closed."
+            )
+        message = f"Signed out. Visit {visit.id} is closed."
+
+    if plate_mismatch or (count_mismatch and not short):
+        notifications.notify_security(
+            f"Visit {visit.id} exited with "
+            f"{'plate' if plate_mismatch else ''}"
+            f"{' and ' if plate_mismatch and count_mismatch else ''}"
+            f"{'headcount' if count_mismatch else ''} mismatch."
+        )
+
+    return {
+        "exited": not short,
+        "result": "ok",
+        "message": message,
+        "people": _people_for(visit),
+        "vehicle": {
+            "expected": expected_plate,
+            "presented": vehicle_plate_out,
+            "mismatch": plate_mismatch,
+        },
+        "headcount": {
+            "expected": baseline,
+            "recorded": person_count_out,
+            "mismatch": count_mismatch,
+        },
+        "visit_id": visit.id,
+        "visitor_name": visitor.name if visitor else None,
+        "host_name": host.name if host else None,
+        "partial_exit": short,
+        "still_inside": (baseline - person_count_out) if short else 0,
+        "visit_status": visit.status,
+        "exit_at": visit.exit_at,
+        "scan_event_id": event.id,
+    }

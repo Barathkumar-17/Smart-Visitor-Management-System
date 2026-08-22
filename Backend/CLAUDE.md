@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 9 — Zone scans
-PHASES_COMPLETE: 0,1,2,3,4,5,6,8
+NEXT_PHASE: 10 — Exit & close-out
+PHASES_COMPLETE: 0,1,2,3,4,5,6,8,9
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 8 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 9 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -263,3 +263,8 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[8]` `valid_to` must be after `valid_from` when a restriction is lifted, mirroring the same check at approve. SPEC is silent; a window ending before it started would make the visitor instantly expired at their next scan.
 - `[8]` The meeting zone is preserved when the zone list is widened, same reasoning as approve — a visitor sent somewhere they may not enter would trip a wrong-zone scan for doing exactly what they were told.
 - `[8]` Verified in testing that the QR and `code6` are byte-identical before and after a restriction is lifted, though zones went from one to three and `valid_to` moved by hours. This is SPEC §9's pointer-not-payload rule holding under the only endpoint that changes both.
+- `[9]` `PATCH /visits/{id}/meeting-point` body defined and written into SPEC §10 — was "changes zones on an already-issued pass" with no body at all, now `meeting_zone_id` required plus optional `allowed_zones`, zone IDS as at approve. Confirmed in chat.
+- `[9]` Moving the meeting point DROPS the old meeting zone from `allowed_zones` when `allowed_zones` is omitted — was undefined. Approve puts the meeting zone in the list automatically, so leaving it behind would mean the abandoned checkpoint still admits the visitor and the demo's "flags the old one" beat would show nothing. Supplying `allowed_zones` replaces the list outright.
+- `[9]` `meeting-point` is legal while `issued` or `inside`, anything else 400 `InvalidRequest`. The status does not change, so it is a domain rule rather than a transition.
+- `[9]` The zone scan deliberately does NOT check revocation or the pass window, unlike the gate. §14 says revoking blocks future ENTRY scans and never ejects anyone already inside, and §10's zone block plus §14 decide exactly three outcomes — an invented `expired` result would alarm every checkpoint over an overstay §11's dashboard already reports.
+- `[9]` The zone-scan response carries `people` and a readable `allowed_zones`. §10 requires faces at the gate and at exit but is silent here; a checkpoint guard does the same job, and the zone list is the field that visibly changes while the QR does not.

@@ -193,3 +193,16 @@ class MeetingPointRequest(BaseModel):
         default=None,
         description="Zone ids. Omit to keep the current list minus the old meeting point.",
     )
+
+
+class CloseRequest(BaseModel):
+    """End-of-day close-out. SPEC section 10.
+
+    The reason is a CONSTRAINED vocabulary, unlike reject and cancel, which
+    take free text. The honesty panel counts visits closed without an exit
+    scan, and free text here would make that count unreadable.
+    """
+
+    reason: str = Field(
+        description="left_without_scanning | still_inside | partial_exit | system_error"
+    )

@@ -567,4 +567,108 @@ curl -sS "$BASE/visits/v_4/scans" \
                    .zone_id != null and .person_count_recorded == null)' > /dev/null
 pass
 
+# --- Phase 10: exit and close-out -------------------------------------------
+# The two ways a visit ends: a clean exit scan, and the guard's end-of-day
+# sweep for everything the exit scan could not resolve.
+
+step "10.1  a full exit closes the visit and stamps exit_at"
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{payload:.qr.payload, signature:.qr.signature, vehicle_plate_out:"TN-11-CD-3131", person_count_out:1}')" \
+  | jq -e '.exited == true and .result == "ok"
+           and .partial_exit == false
+           and .visit_status == "closed"
+           and .exit_at != null
+           and .vehicle.mismatch == false
+           and .headcount.mismatch == false' > /dev/null
+pass
+
+step "10.2  a normal exit leaves closed_reason null - that is how close-out is told apart"
+curl -sS "$BASE/visits/v_4" \
+  | jq -e '.status == "closed" and .exit_at != null and .closed_reason == null' > /dev/null
+pass
+
+step "10.3  and she is gone from the inside list"
+curl -sS "$BASE/visits?status=inside" -H 'X-Role: admin' \
+  | jq -e 'all(.[]; .id != "v_4")' > /dev/null
+pass
+
+step "10.4  admit visitor B's group of three"
+curl -sS -X POST "$BASE/scans/gate/entry" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_3" | jq -c '{payload:.qr.payload, signature:.qr.signature, vehicle_plate:"TN-07-XY-9090", person_count_in:3}')" \
+  | jq -e '.admitted == true and .headcount.expected == 3 and .headcount.mismatch == false' > /dev/null
+pass
+
+step "10.5  only two leave - the visit STAYS inside, with nobody signed out"
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_3" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_out:2}')" \
+  | jq -e '.exited == false
+           and .partial_exit == true
+           and .still_inside == 1
+           and .visit_status == "inside"
+           and .exit_at == null' > /dev/null
+pass
+
+step "10.6  SPEC 11's partial_exit condition derives true on the record itself"
+curl -sS "$BASE/visits/v_3" \
+  | jq -e '.status == "inside"
+           and .person_count_out != null
+           and (.person_count_out < .person_count_in)' > /dev/null
+pass
+
+step "10.7  security was told, with the number still inside"
+curl -sS "$BASE/dev/notifications" \
+  | jq -e 'any(.notifications[]; .recipient == "security_desk"
+                                 and (.message | test("Partial exit on visit v_3")))' > /dev/null
+pass
+
+step "10.8  close-out resolves it, and STILL leaves exit_at null"
+curl -sS -X POST "$BASE/visits/v_3/close" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d '{"reason":"partial_exit"}' \
+  | jq -e '.status == "closed"
+           and .closed_reason == "partial_exit"
+           and .exit_at == null' > /dev/null
+curl -sS "$BASE/visits?status=inside" -H 'X-Role: admin' \
+  | jq -e 'all(.[]; .id != "v_3")' > /dev/null
+pass
+
+step "10.9  an exit scan on a closed visit is 200 wrong_status, and still recorded"
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_out:1}')" \
+  | jq -e '.exited == false and .result == "wrong_status" and .scan_event_id != null' > /dev/null
+pass
+
+step "10.10  closing an already-closed visit is 409, from the state machine"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/visits/v_3/close" \
+  -H 'Content-Type: application/json' -H 'X-Role: guard' -d '{"reason":"still_inside"}' \
+  | grep -q '^409$' || { printf 'double close-out was not refused\n' >&2; exit 1; }
+pass
+
+step "10.11  an invented close reason is 400"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/visits/v_2/close" \
+  -H 'Content-Type: application/json' -H 'X-Role: guard' -d '{"reason":"went_home"}' \
+  | grep -q '^400$' || { printf 'a close reason outside the vocabulary was accepted\n' >&2; exit 1; }
+pass
+
+step "10.12  SPEC 14 - MORE people out than in closes normally, flagged not blocked"
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_2" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_out:2}')" \
+  | jq -e '.exited == true
+           and .partial_exit == false
+           and .visit_status == "closed"
+           and .headcount.mismatch == true' > /dev/null
+pass
+
+step "10.13  the overstayer, past valid_to, can still leave"
+curl -sS "$BASE/visits/v_6" | jq -e '.status == "inside" and .valid_to != null' > /dev/null
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_6" | jq -c '{code6:.code6, person_count_out:1}')" \
+  | jq -e '.exited == true and .result == "ok" and .visit_status == "closed"' > /dev/null
+pass
+
+step "10.14  every exit is on the audit trail with its count"
+curl -sS "$BASE/visits/v_3/scans" \
+  | jq -e 'any(.[]; .kind == "exit" and .result == "ok"
+                    and .count_mismatch == true and .person_count_recorded == 2)' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'

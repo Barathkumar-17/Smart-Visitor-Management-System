@@ -15,6 +15,7 @@ from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
     ApproveRequest,
     ArrivalAckRequest,
+    CloseRequest,
     MeetingPointRequest,
     ReasonRequest,
     VisitCreate,
@@ -156,3 +157,16 @@ async def change_meeting_point(
         meeting_zone_id=body.meeting_zone_id,
         allowed_zones=body.allowed_zones,
     )
+
+
+@router.post("/{visit_id}/close", response_model=VisitOut)
+async def close_visit(
+    visit_id: str, body: CloseRequest, _user=Depends(require_role("guard"))
+):
+    """End-of-day close-out. SPEC sections 4.3 and 10.
+
+    The guard's sweep for whatever the exit scan could not resolve. Legal only
+    from `inside` - the state machine returns 409 from anywhere else - and it
+    leaves exit_at null on purpose, because nobody scanned out.
+    """
+    return visit_service.close_visit(visit_id, body.reason)

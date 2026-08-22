@@ -600,3 +600,58 @@ def change_meeting_point(
         visit.allowed_zones,
     )
     return visit
+
+
+# SPEC section 10's close-out vocabulary, verbatim. Free text here would make
+# the honesty panel's "closed without an exit scan" count unreadable.
+CLOSE_REASONS: tuple[str, ...] = (
+    "left_without_scanning",
+    "still_inside",
+    "partial_exit",
+    "system_error",
+)
+
+
+def close_visit(visit_id: str, reason: str) -> Visit:
+    """End-of-day close-out by the guard. SPEC sections 4.3 and 10.
+
+    This is the sweep that resolves whatever the exit scan could not: a group
+    that half left, someone who walked out past an unattended barrier, a visit
+    still open at midnight. SPEC section 4 decision 3 makes it the guard's job,
+    not the host's.
+
+    LEGAL ONLY FROM `inside`, and the state machine is what enforces that -
+    every other status gives 409 IllegalTransition rather than a check here.
+
+    exit_at IS DELIBERATELY LEFT NULL. Nobody scanned out; that is the whole
+    reason this endpoint was called. A closed visit with no exit_at is exactly
+    what the honesty panel counts as "closed without an exit scan" (SPEC
+    section 10), and stamping a time here would make that count unreachable and
+    the record a small lie.
+    """
+    if reason not in CLOSE_REASONS:
+        raise InvalidRequest(
+            f"reason must be one of {', '.join(CLOSE_REASONS)}",
+            {"reason": reason, "allowed": list(CLOSE_REASONS)},
+        )
+
+    visit = visit_repo.get_or_404(visit_id)
+    transition(visit, "closed", "guard:u_guard")
+
+    visit.closed_reason = reason
+    visit_repo.save(visit)
+
+    host = host_repo.get(visit.host_id)
+    visitor = visitor_repo.get(visit.visitor_id)
+    if host is not None and visitor is not None:
+        notifications.notify_host(
+            host, f"Visit {visit.id} for {visitor.name} was closed out: {reason}."
+        )
+
+    # Every close-out is by definition an anomaly - a visit that ended normally
+    # closed itself at the exit scan and never reached this endpoint.
+    notifications.notify_security(
+        f"Close-out on visit {visit.id}: {reason}. No exit scan was recorded."
+    )
+    log.info("visit %s closed out by guard: %s", visit.id, reason)
+    return visit

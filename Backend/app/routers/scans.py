@@ -17,6 +17,8 @@ from app.core.security import require_role
 from app.schemas.scan import (
     GateEntryRequest,
     GateEntryResponse,
+    GateExitRequest,
+    GateExitResponse,
     ZoneScanRequest,
     ZoneScanResponse,
 )
@@ -65,3 +67,23 @@ async def zone_scan(body: ZoneScanRequest, _user=Depends(require_role("guard")))
         code6=body.code6,
     )
     return ZoneScanResponse(**result)
+
+
+@router.post("/gate/exit", response_model=GateExitResponse)
+async def gate_exit(body: GateExitRequest, _user=Depends(require_role("guard"))):
+    """The exit scan. SPEC sections 4.3 and 10.
+
+    Photos shown again, plate compared against what actually entered, and the
+    count decides whether the visit closes. A short count keeps the visit
+    `inside` with the partial-exit flag raised and security told; anything else
+    closes it. Never blocks, and never checks revocation or the pass window -
+    an overstaying visitor is exactly the person who needs to leave.
+    """
+    result = scan_service.gate_exit(
+        payload=body.payload.model_dump() if body.payload else None,
+        signature=body.signature,
+        code6=body.code6,
+        vehicle_plate_out=body.vehicle_plate_out,
+        person_count_out=body.person_count_out,
+    )
+    return GateExitResponse(**result)
