@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 8 — Arrival ack
-PHASES_COMPLETE: 0,1,2,3,4,5,6
+NEXT_PHASE: 9 — Zone scans
+PHASES_COMPLETE: 0,1,2,3,4,5,6,8
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 6 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 8 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -259,3 +259,7 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[6]` The gate window check is skipped when `valid_from`/`valid_to` are null — a visit forced to `issued` through `/dev/transition` never went through approve and has no window to violate.
 - `[6]` `vehicle_plate_in` is overwritten with the plate that ACTUALLY arrived, so Phase 10's exit compares against what entered. The declared plate is captured first for the response and survives on the ScanEvent as `plate_mismatch`.
 - `[6]` Bug found in testing: `vehicle.expected` echoed the presented plate because the record was overwritten before the response was built, so a mismatch displayed two identical values. Fixed by capturing the expected plate first.
+- `[8]` `arrival-ack` on a visit that is not `inside` returns 400 `InvalidRequest` — SPEC §10 is silent on it. There is no arrival to acknowledge before someone arrives, and the status does not change here, so it is a domain rule rather than a transition.
+- `[8]` `valid_to` must be after `valid_from` when a restriction is lifted, mirroring the same check at approve. SPEC is silent; a window ending before it started would make the visitor instantly expired at their next scan.
+- `[8]` The meeting zone is preserved when the zone list is widened, same reasoning as approve — a visitor sent somewhere they may not enter would trip a wrong-zone scan for doing exactly what they were told.
+- `[8]` Verified in testing that the QR and `code6` are byte-identical before and after a restriction is lifted, though zones went from one to three and `valid_to` moved by hours. This is SPEC §9's pointer-not-payload rule holding under the only endpoint that changes both.
