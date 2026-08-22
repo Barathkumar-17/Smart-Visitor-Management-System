@@ -174,3 +174,22 @@ class VisitDetail(VisitOut):
     """
 
     companions: list[CompanionOut] = Field(default_factory=list)
+
+
+class MeetingPointRequest(BaseModel):
+    """Move the meeting on a pass already in someone's hand. SPEC section 10.
+
+    Zone IDS, matching ApproveRequest - the host is picking from a list, while
+    the scanner at a door reads a zone CODE.
+
+    Omitting allowed_zones keeps the zones the host granted on top of the
+    meeting point and swaps the meeting point itself, so the OLD one stops
+    working. Supplying it replaces the list outright. Either way the new
+    meeting zone ends up in the list, as it does at approval.
+    """
+
+    meeting_zone_id: str = Field(min_length=1)
+    allowed_zones: list[str] | None = Field(
+        default=None,
+        description="Zone ids. Omit to keep the current list minus the old meeting point.",
+    )

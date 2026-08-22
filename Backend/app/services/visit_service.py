@@ -524,3 +524,79 @@ def arrival_ack(
         log.info("visit %s acknowledged by host %s", visit.id, visit.host_id)
 
     return visit
+
+
+def change_meeting_point(
+    visit_id: str,
+    meeting_zone_id: str,
+    allowed_zones: list[str] | None = None,
+) -> Visit:
+    """The host moves the meeting. SPEC section 10.
+
+    THIS ENDPOINT EXISTS TO PROVE THE POINTER-NOT-PAYLOAD DESIGN, and SPEC
+    section 10 says so in as many words. It changes where a visitor may go on a
+    pass they are already carrying, and it MUST NOT reissue the QR. It does not
+    reissue it for a simple reason: it never touches the pass at all. Zones are
+    not in the signed payload (SPEC section 9), so the next scan reads this
+    record fresh and the visitor's QR is byte-identical either side of the call.
+
+    WHAT HAPPENS TO THE OLD MEETING POINT. When allowed_zones is omitted, the
+    previous meeting zone is DROPPED from the list and the new one added. It
+    was in the list because it was the meeting point - approve puts it there
+    automatically - so leaving it behind would mean the visitor still passes at
+    a checkpoint nobody expects them at any more. Zones the host granted on top
+    of the meeting point are untouched. Passing allowed_zones replaces the list
+    outright, and the new meeting zone is still added to whatever is supplied.
+
+    Legal while `issued` or `inside`: before arrival, so the visitor is told the
+    right place to go, and after, which is the interesting case and the one on
+    screen. Anything else is InvalidRequest - the status does not change here,
+    so this is a domain rule and not a transition.
+    """
+    visit = visit_repo.get_or_404(visit_id)
+
+    if visit.status not in ("issued", "inside"):
+        raise InvalidRequest(
+            f"Visit {visit.id} is {visit.status}. A meeting point can only be "
+            "moved on a pass that is issued or in use.",
+            {"visit_id": visit.id, "status": visit.status},
+        )
+
+    zone_repo.get_or_404(meeting_zone_id)
+
+    if allowed_zones is not None:
+        for zone_id in allowed_zones:
+            if zone_repo.get(zone_id) is None:
+                raise InvalidRequest(
+                    f"Unknown zone {zone_id}",
+                    {"zone_id": zone_id, "field": "allowed_zones"},
+                )
+        base = list(allowed_zones)
+    else:
+        base = [z for z in visit.allowed_zones if z != visit.meeting_zone_id]
+
+    previous_zone_id = visit.meeting_zone_id
+    visit.meeting_zone_id = meeting_zone_id
+    visit.allowed_zones = list(dict.fromkeys([meeting_zone_id, *base]))
+    visit_repo.save(visit)
+
+    zone = zone_repo.get(meeting_zone_id)
+    previous = zone_repo.get(previous_zone_id) if previous_zone_id else None
+    where = f"{zone.code} - {zone.name}" if zone else meeting_zone_id
+
+    visitor = visitor_repo.get(visit.visitor_id)
+    if visitor is not None:
+        notifications.notify_visitor(
+            visitor,
+            f"The meeting point for visit {visit.id} has moved to {where}. "
+            "Your pass is unchanged - keep using the same QR code.",
+        )
+
+    log.info(
+        "visit %s meeting point moved %s -> %s, zones now %s (pass NOT reissued)",
+        visit.id,
+        previous.code if previous else previous_zone_id,
+        zone.code if zone else meeting_zone_id,
+        visit.allowed_zones,
+    )
+    return visit

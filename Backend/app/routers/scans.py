@@ -14,7 +14,12 @@ code6 - which is InvalidRequest (400), because there is nothing to scan.
 from fastapi import APIRouter, Depends
 
 from app.core.security import require_role
-from app.schemas.scan import GateEntryRequest, GateEntryResponse
+from app.schemas.scan import (
+    GateEntryRequest,
+    GateEntryResponse,
+    ZoneScanRequest,
+    ZoneScanResponse,
+)
 from app.services import scan_service
 
 router = APIRouter(prefix="/scans", tags=["scans"])
@@ -40,3 +45,23 @@ async def gate_entry(body: GateEntryRequest, _user=Depends(require_role("guard")
         authorised_by=body.authorised_by,
     )
     return GateEntryResponse(**result)
+
+
+@router.post("/zone", response_model=ZoneScanResponse)
+async def zone_scan(body: ZoneScanRequest, _user=Depends(require_role("guard"))):
+    """A checkpoint scan inside the campus. SPEC section 10.
+
+    Reads allowed_zones FRESH from the visit, never from the QR. In the list is
+    `ok` and the host is told; not in the list is `wrong_zone` and security is
+    told; neither is an error, and neither blocks anyone.
+
+    An unknown zone_code is the one 400 here - SPEC section 8 decides it - and
+    it is a problem with the scanner, not with the visitor.
+    """
+    result = scan_service.zone_scan(
+        zone_code=body.zone_code,
+        payload=body.payload.model_dump() if body.payload else None,
+        signature=body.signature,
+        code6=body.code6,
+    )
+    return ZoneScanResponse(**result)

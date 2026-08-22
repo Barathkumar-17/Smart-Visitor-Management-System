@@ -297,7 +297,14 @@ POST   /visits/{id}/fallback-decision     role: admin | security
                                           window, sets restricted = True and approved_by.
                                           This is the ONLY path that sets restricted.
 PATCH  /visits/{id}/meeting-point         role: faculty
-                                          Changes zones on an already-issued pass.
+                                          Body: meeting_zone_id (REQUIRED) and optional
+                                          allowed_zones[]. Zone IDS, as at approve.
+                                          Legal while `issued` or `inside`; anything else
+                                          is InvalidRequest.
+                                          Omitting allowed_zones keeps the current list
+                                          with the OLD meeting zone REMOVED; supplying it
+                                          replaces the list. Either way the new meeting
+                                          zone is added, as at approve.
                                           MUST NOT reissue the QR. This endpoint exists to
                                           prove the pointer-not-payload design.
 POST   /visits/{id}/arrival-ack           role: faculty

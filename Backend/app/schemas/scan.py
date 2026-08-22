@@ -114,3 +114,49 @@ class GateEntryResponse(BaseModel):
 
     restricted: bool = False
     scan_event_id: str | None = None
+
+
+class ZoneScanRequest(BaseModel):
+    """A checkpoint scan. SPEC section 10.
+
+    zone_code is a CODE, not an id, because that is what a scanner at a door
+    reads off its own configuration. Zone IDS are what the approve and
+    meeting-point bodies take, where a host is picking from a list.
+    """
+
+    zone_code: str = Field(min_length=1, description="The zone's short code, e.g. LAB.")
+
+    payload: QrPayload | None = None
+    signature: str | None = None
+    code6: str | None = Field(
+        default=None, description="Fallback for handsets that cannot show a QR."
+    )
+
+
+class ZoneScanResponse(BaseModel):
+    """What the checkpoint screen renders. ALWAYS 200, refusals included.
+
+    `allowed_zones` is returned in full and in readable form on purpose. It is
+    read fresh from the visit at every scan, so showing it is what makes the
+    pointer-not-payload design visible: move the meeting point and this list
+    changes while the visitor's QR does not.
+    """
+
+    ok: bool
+    result: str = Field(description="ok | wrong_zone | wrong_status | bad_signature")
+    message: str
+
+    people: list[PersonOut] = Field(default_factory=list)
+
+    visit_id: str | None = None
+    visitor_name: str | None = None
+    host_name: str | None = None
+    purpose: str | None = None
+
+    scanned_zone: str | None = Field(default=None, description="Where the scan happened.")
+    meeting_zone: str | None = Field(default=None, description="Where they are expected.")
+    allowed_zones: list[str] = Field(
+        default_factory=list, description="Read fresh from the visit at scan time."
+    )
+
+    scan_event_id: str | None = None

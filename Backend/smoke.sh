@@ -478,4 +478,93 @@ curl -sS "$BASE/dev/notifications" \
                                  and (.message | test("Restriction lifted")))' > /dev/null
 pass
 
+# --- Phase 9: zone scans and moving the meeting point ------------------------
+# Runs on v_4, visitor D, who is inside with a pass in her hand after Phase 8.
+# This is demo beat two: the QR must not change while everything around it does.
+
+step "9.1  capture D's QR and code6 BEFORE anything moves"
+QR9_BEFORE=$(curl -sS "$BASE/passes/v_4" | jq -cS '.qr')
+C69_BEFORE=$(curl -sS "$BASE/passes/v_4" | jq -r '.code6')
+[ -n "$QR9_BEFORE" ] || { printf 'no QR to compare\n' >&2; exit 1; }
+pass
+
+step "9.2  a scan at her meeting point is ok, and the host is told"
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"DEPT", payload:.qr.payload, signature:.qr.signature}')" \
+  | jq -e '.ok == true and .result == "ok"
+           and .scanned_zone == "DEPT - Department Office"
+           and (.allowed_zones | length) == 2
+           and .scan_event_id != null' > /dev/null
+pass
+
+step "9.3  a scan somewhere she is not cleared for is wrong_zone, still 200"
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"LIB", payload:.qr.payload, signature:.qr.signature}')" \
+  | jq -e '.ok == false and .result == "wrong_zone" and .scan_event_id != null' > /dev/null
+curl -sS "$BASE/dev/notifications" \
+  | jq -e 'any(.notifications[]; .recipient == "security_desk"
+                                 and (.message | test("Wrong-zone scan: visit v_4")))' > /dev/null
+pass
+
+step "9.4  the host moves the meeting to the library"
+curl -sS -X PATCH "$BASE/visits/v_4/meeting-point" \
+  -H 'Content-Type: application/json' -H 'X-Role: faculty' \
+  -d '{"meeting_zone_id":"z_2"}' \
+  | jq -e '.meeting_zone_id == "z_2"
+           and (.allowed_zones | index("z_2")) != null
+           and (.allowed_zones | index("z_5")) == null' > /dev/null
+pass
+
+step "9.5  THE PROOF - the QR is byte-identical after the move (SPEC section 9)"
+QR9_AFTER=$(curl -sS "$BASE/passes/v_4" | jq -cS '.qr')
+C69_AFTER=$(curl -sS "$BASE/passes/v_4" | jq -r '.code6')
+[ "$QR9_BEFORE" = "$QR9_AFTER" ] \
+  || { printf 'QR changed when the meeting point moved - it must not\n' >&2; exit 1; }
+[ "$C69_BEFORE" = "$C69_AFTER" ] \
+  || { printf 'code6 changed - the pass was reissued, which it must not be\n' >&2; exit 1; }
+pass
+
+step "9.6  the SAME unchanged QR now scans ok at the new zone"
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"LIB", payload:.qr.payload, signature:.qr.signature}')" \
+  | jq -e '.ok == true and .result == "ok" and .meeting_zone == "LIB - Library"' > /dev/null
+pass
+
+step "9.7  and the OLD meeting point now flags"
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"DEPT", payload:.qr.payload, signature:.qr.signature}')" \
+  | jq -e '.ok == false and .result == "wrong_zone"' > /dev/null
+pass
+
+step "9.8  the code6 fallback resolves at a checkpoint too"
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"MAIN", code6:.code6}')" \
+  | jq -e '.ok == true and .result == "ok"' > /dev/null
+pass
+
+step "9.9  a zone scan on a visit nobody entered on is wrong_status, and silent"
+N9_BEFORE=$(curl -sS "$BASE/dev/notifications" | jq '.notifications | length')
+curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_3" | jq -c '{zone_code:"DEPT", payload:.qr.payload, signature:.qr.signature}')" \
+  | jq -e '.ok == false and .result == "wrong_status" and .scan_event_id != null' > /dev/null
+N9_AFTER=$(curl -sS "$BASE/dev/notifications" | jq '.notifications | length')
+[ "$N9_BEFORE" = "$N9_AFTER" ] \
+  || { printf 'a wrong_status zone scan notified somebody - SPEC 14 says nobody\n' >&2; exit 1; }
+pass
+
+step "9.10  an unknown zone code is the one 400 on this endpoint"
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/scans/zone" \
+  -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_4" | jq -c '{zone_code:"CANTEEN", payload:.qr.payload, signature:.qr.signature}')" \
+  | grep -q '^400$' || { printf 'unknown zone code was not rejected\n' >&2; exit 1; }
+pass
+
+step "9.11  every one of those scans is on the audit trail, zone id and all"
+curl -sS "$BASE/visits/v_4/scans" \
+  | jq -e '([.[] | select(.kind == "zone")] | length) >= 5
+           and ([.[] | select(.result == "wrong_zone")] | length) >= 2
+           and all(.[] | select(.kind == "zone");
+                   .zone_id != null and .person_count_recorded == null)' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'

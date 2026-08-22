@@ -12,13 +12,14 @@ TWO RULES GOVERN EVERYTHING IN THIS FILE.
    SPEC section 8: a scan that raised would tempt a caller to abandon the
    request before the event was written.
 
-Phase 6 implements gate entry. Zone scans (Phase 9) and exit (Phase 10) reuse
-_record() below, which is the single writer.
+Phase 6 implements gate entry and Phase 9 the zone scan. Both end at _record()
+below, which is the single writer; exit (Phase 10) will too.
 """
 
 import logging
 
 from app.core import clock
+from app.core.errors import InvalidRequest
 from app.integrations import notifications
 from app.repositories import (
     companion_repo,
@@ -303,5 +304,143 @@ def gate_entry(
         "valid_until": visit.valid_to,
         "entry_at": visit.entry_at,
         "restricted": visit.restricted,
+        "scan_event_id": event.id,
+    }
+
+
+def _zone_label(zone) -> str | None:
+    return f"{zone.code} - {zone.name}" if zone else None
+
+
+def _zone_labels(zone_ids: list[str]) -> list[str]:
+    """Zone ids rendered for a screen. The dashboard and the guard both want to
+    read where someone may go, not a list of z_4-style keys."""
+    labels = []
+    for zone_id in zone_ids:
+        zone = zone_repo.get(zone_id)
+        labels.append(_zone_label(zone) or zone_id)
+    return labels
+
+
+def zone_scan(
+    zone_code: str,
+    payload: dict | None = None,
+    signature: str | None = None,
+    code6: str | None = None,
+) -> dict:
+    """A checkpoint scan somewhere inside the campus. SPEC section 10.
+
+    THIS ENDPOINT NEVER BLOCKS ANYONE. SPEC section 10 says so outright: it
+    records and returns what happened. There is no barrier here to hold shut -
+    the person is already inside - so refusing would achieve nothing except
+    losing the evidence that they were somewhere unexpected.
+
+    allowed_zones IS READ FRESH FROM THE VISIT, never from the QR. That single
+    line is the whole point of the pointer-not-payload design in SPEC section
+    9: a host moves the meeting point, the visitor's QR does not change by one
+    byte, and the very next scan at the new zone comes back ok while the old
+    one starts flagging.
+
+    Outcomes, in the order they are decided:
+
+      unknown zone_code   -> InvalidRequest (400). SPEC section 8 decides this
+                             one. There is no zone to record an event against.
+      signature fails     -> bad_signature, no event - no trustworthy visit id
+      visit not `inside`  -> wrong_status, event written, NOBODY notified
+                             (SPEC section 14, decided explicitly)
+      zone in the list    -> ok, host notified
+      zone not in list    -> wrong_zone, security notified
+
+    TWO CHECKS THE GATE MAKES AND THIS DELIBERATELY DOES NOT. Revocation is not
+    checked, because SPEC section 14 says revoking prevents future ENTRY scans
+    and does not eject anyone already inside. The pass window is not checked
+    either: SPEC section 10's zone block decides exactly two outcomes and
+    section 14's list adds one more, and inventing an `expired` result would
+    turn every checkpoint into an alarm for a visitor whose overstay the
+    dashboard already reports (SPEC section 11).
+    """
+    zone = zone_repo.find_by_code(zone_code)
+    if zone is None:
+        # SPEC section 8: unknown zone code is InvalidRequest. Unlike every
+        # other outcome here this one raises, because with no zone resolved
+        # there is nowhere to attach a ScanEvent - the scanner sent something
+        # this system has never heard of.
+        raise InvalidRequest(
+            f"Unknown zone code {zone_code}",
+            {"zone_code": zone_code, "field": "zone_code"},
+        )
+
+    issued, lookup = pass_service.resolve_scan(payload, signature, code6)
+
+    if lookup in ("bad_signature", "not_found"):
+        log.warning("zone scan at %s rejected: pass did not resolve (%s)", zone_code, lookup)
+        return {
+            "ok": False,
+            "result": "bad_signature",
+            "message": "No active pass matches this code or payload.",
+            "scanned_zone": _zone_label(zone),
+        }
+
+    visit = visit_repo.get_or_404(issued.visit_id)
+    visitor = visitor_repo.get(visit.visitor_id)
+    host = host_repo.get(visit.host_id)
+
+    base = {
+        "visit_id": visit.id,
+        "visitor_name": visitor.name if visitor else None,
+        "host_name": host.name if host else None,
+        "purpose": visit.purpose,
+        "scanned_zone": _zone_label(zone),
+        "meeting_zone": _zone_label(zone_repo.get(visit.meeting_zone_id))
+        if visit.meeting_zone_id
+        else None,
+        "allowed_zones": _zone_labels(visit.allowed_zones),
+        "people": _people_for(visit),
+    }
+
+    # --- not inside ---------------------------------------------------------
+    # SPEC section 14, verbatim: 200, result wrong_status, the event is still
+    # written, and nobody is notified. A visit that never entered cannot be
+    # confirmed as having arrived anywhere.
+    if visit.status != "inside":
+        event = _record(visit.id, "zone", "wrong_status", zone_id=zone.id)
+        return {
+            **base,
+            "ok": False,
+            "result": "wrong_status",
+            "message": f"Visit {visit.id} is {visit.status}, not inside. "
+            "Nobody has entered on this pass.",
+            "scan_event_id": event.id,
+        }
+
+    # --- the fresh read -----------------------------------------------------
+    allowed = zone.id in visit.allowed_zones
+
+    if allowed:
+        event = _record(visit.id, "zone", "ok", zone_id=zone.id)
+        if host is not None and visitor is not None:
+            notifications.notify_host(
+                host,
+                f"{visitor.name} scanned in at {_zone_label(zone)} for visit {visit.id}.",
+            )
+        return {
+            **base,
+            "ok": True,
+            "result": "ok",
+            "message": f"{visitor.name if visitor else 'Visitor'} is expected here.",
+            "scan_event_id": event.id,
+        }
+
+    event = _record(visit.id, "zone", "wrong_zone", zone_id=zone.id)
+    notifications.notify_security(
+        f"Wrong-zone scan: visit {visit.id} scanned at {_zone_label(zone)}, "
+        f"which is not on the pass. Allowed: {', '.join(base['allowed_zones']) or 'nothing'}."
+    )
+    return {
+        **base,
+        "ok": False,
+        "result": "wrong_zone",
+        "message": f"{visitor.name if visitor else 'This visitor'} is not cleared for "
+        f"{_zone_label(zone)}. Security has been notified.",
         "scan_event_id": event.id,
     }

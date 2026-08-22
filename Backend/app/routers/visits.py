@@ -15,6 +15,7 @@ from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
     ApproveRequest,
     ArrivalAckRequest,
+    MeetingPointRequest,
     ReasonRequest,
     VisitCreate,
     VisitDetail,
@@ -137,3 +138,21 @@ async def cancel_visit(
     """Call off a visit already approved and issued. Legal only while `issued`,
     never once `inside`. Distinct from a security revoke. SPEC section 10."""
     return visit_service.cancel_visit(visit_id, body.reason)
+
+
+@router.patch("/{visit_id}/meeting-point", response_model=VisitOut)
+async def change_meeting_point(
+    visit_id: str, body: MeetingPointRequest, _user=Depends(require_role("faculty"))
+):
+    """Move the meeting on a pass the visitor is already carrying.
+
+    SPEC section 10: this endpoint exists to prove the pointer-not-payload
+    design, and it MUST NOT reissue the QR. It does not touch the pass at all -
+    zones are not in the signed payload (SPEC section 9), so the next scan
+    reads this record fresh and the QR is byte-identical either side.
+    """
+    return visit_service.change_meeting_point(
+        visit_id=visit_id,
+        meeting_zone_id=body.meeting_zone_id,
+        allowed_zones=body.allowed_zones,
+    )
