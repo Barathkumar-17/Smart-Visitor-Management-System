@@ -11,7 +11,7 @@ Records this build cannot yet produce are NOT faked here.
 Seeded at Phase 1:  zones, hosts, visitor A (+ requested visit),
                     visitor C (+ fallback-admitted visit, already inside)
 Added at Phase 3:   photo refs for every seeded visitor, via storage.put()
-Added at Phase 5:   visitor B and her issued pass - needs signing
+Added at Phase 5:   visitor B, her two companions and her signed pass
 Added at Phase 6:   visitors D, E, F, and the scan events for C, D, E and F
                     - needs the scan service
 
@@ -27,9 +27,17 @@ from datetime import timedelta
 from app.core import clock
 from app.core.config import RESTRICTED_VISIT_DURATION
 from app.integrations import storage
-from app.repositories import host_repo, visit_repo, visitor_repo, zone_repo
+from app.repositories import (
+    companion_repo,
+    host_repo,
+    visit_repo,
+    visitor_repo,
+    zone_repo,
+)
+from app.services import pass_service, visitor_service
+from app.services.visit_service import transition
 from app.store import ids, memory
-from app.store.entities import Host, Visit, Visitor, Zone
+from app.store.entities import Companion, Host, Visit, Visitor, Zone
 
 
 def _placeholder_photo(rgb: tuple[int, int, int]) -> str:
@@ -247,12 +255,91 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     )
 
 
+def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
+    """Visitor B - vouched, pass issued, two linked companions, ready to scan in.
+
+    Added at Phase 5 because her pass needs signing, which did not exist
+    before. She is the fixture Phase 6's gate-entry demo runs on: the one
+    seeded visitor holding a valid, unused pass.
+
+    Her group is three - herself plus two companions - so the entry response
+    leads with three faces and the guard's headcount has something to disagree
+    with. SPEC section 14: person_count_expected is the TOTAL, including her.
+
+    Her vouch goes through visitor_service.apply_vouch rather than being
+    written by hand, so the seeded record carries exactly the fields a real
+    approval would set, including vouched_by_host_id and a verified_until 100
+    days out. Her pass likewise goes through pass_service.issue_pass, so it is
+    signed with the same key and carries a code6 unique among active passes.
+    """
+    host = hosts[0]
+    meeting_zone = zones_by_code["DEPT"]
+    valid_from = clock.now() - timedelta(minutes=30)
+
+    visitor = visitor_repo.save(
+        Visitor(
+            id=ids.next_id("visitor"),
+            name="Suresh Iyer",
+            phone="+91-98400-44444",
+            address="8 Poonamallee High Road, Chennai 600010",
+            email="suresh.iyer@example.in",
+            phone_verified=True,
+            photo_ref=storage.put(_placeholder_photo((120, 92, 160))),
+        )
+    )
+
+    visit = visit_repo.save(
+        Visit(
+            id=ids.next_id("visit"),
+            visitor_id=visitor.id,
+            host_id=host.id,
+            purpose="Equipment delivery and installation briefing",
+            scheduled_at=valid_from,
+            status="requested",
+            origin="pre_registered",
+            person_count_expected=3,
+            vehicle_plate_in="TN-07-XY-9090",
+        )
+    )
+
+    for name, rgb in (("Lakshmi Iyer", (90, 150, 120)), ("Mohan Das", (170, 110, 90))):
+        companion_repo.save(
+            Companion(
+                id=ids.next_id("companion"),
+                visit_id=visit.id,
+                name=name,
+                photo_ref=storage.put(_placeholder_photo(rgb)),
+            )
+        )
+
+    # Vouched by the host at approval, exactly as SPEC section 7 requires -
+    # never pre-cleared ahead of the visit.
+    visitor_service.apply_vouch(visitor, host.id, visit.origin)
+
+    # Through the real state machine, so the seeded visit followed the same
+    # legal path a live one does: requested -> approved -> issued.
+    actor = f"faculty:{host.id}"
+    transition(visit, "approved", actor)
+
+    visit.meeting_zone_id = meeting_zone.id
+    visit.allowed_zones = [meeting_zone.id, zones_by_code["MAIN"].id]
+    visit.valid_from = valid_from
+    visit.valid_to = valid_from + timedelta(hours=4)
+    visit.approved_by = actor
+    visit_repo.save(visit)
+
+    transition(visit, "issued", actor)
+
+    pass_service.issue_pass(visit.id)
+
+
 def load() -> None:
     """Populate an empty store. Called at startup and by /dev/reset."""
     zones_by_code = _seed_zones()
     hosts = _seed_hosts()
     _seed_visitor_a(hosts)
     _seed_visitor_c(hosts, zones_by_code)
+    _seed_visitor_b(hosts, zones_by_code)
 
 
 def reset() -> None:

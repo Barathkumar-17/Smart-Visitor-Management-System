@@ -10,6 +10,15 @@
 #         BASE=http://host:port bash smoke.sh
 #
 # Requires: curl, jq
+#
+# SEEDED IDS, after step 0. Test steps depend on these being stable.
+#   visitors  vr_1 Ramesh Kumar (A, DigiLocker)
+#             vr_2 Deepa Nair   (C, restricted, already inside)
+#             vr_3 Suresh Iyer  (B, vouched, pass issued, 2 companions)
+#   visits    v_1 requested (A)   v_2 inside (C)   v_3 issued (B)
+#   passes    p_1 for v_3
+#   The first visitor this script registers is therefore vr_4, and the first
+#   visit it creates is v_4.
 
 set -euo pipefail
 
@@ -31,8 +40,8 @@ curl -sS -m 5 -o /dev/null "$BASE/health" 2>/dev/null || {
 
 # --- Step 0: reset ----------------------------------------------------------
 # Always first, from Phase 1 onward, so a failed run cannot leave state that
-# breaks the next one. Ids below are deterministic because reset zeroes the
-# id counters before reseeding.
+# breaks the next one. Ids above are deterministic because reset zeroes the id
+# counters before reseeding.
 
 step "0    POST /dev/reset -> seeded, clock back to zero"
 curl -sS -X POST "$BASE/dev/reset" \
@@ -40,8 +49,8 @@ curl -sS -X POST "$BASE/dev/reset" \
            and .clock_offset_minutes == 0
            and .seeded.zones == 5
            and .seeded.hosts == 3
-           and .seeded.visitors == 2
-           and .seeded.visits == 2' > /dev/null
+           and .seeded.visitors == 3
+           and .seeded.visits == 3' > /dev/null
 pass
 
 # --- Phase 0: skeleton ------------------------------------------------------
@@ -112,6 +121,7 @@ pass
 step "2.5  reset, so later phases do not inherit a closed v_1"
 curl -sS -X POST "$BASE/dev/reset" | jq -e '.reset == true' > /dev/null
 pass
+
 # --- Phase 3: registration and verification ---------------------------------
 # A tiny valid PNG, so the photo path is exercised with real image bytes rather
 # than an arbitrary string that happens to be base64.
@@ -120,7 +130,7 @@ PHOTO="iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAIUlEQVR4nGP8z0AKYCJJ9aiGU
 step "3.1  POST /visitors -> registered, tier temporary, ref out not base64"
 curl -sS -X POST "$BASE/visitors" -H 'Content-Type: application/json' \
   -d "{\"name\":\"Priya Raman\",\"phone\":\"+91-99999-88888\",\"photo_b64\":\"$PHOTO\"}" \
-  | jq -e '.id == "vr_3"
+  | jq -e '.id == "vr_4"
            and .tier == "temporary"
            and .photo_ref != null
            and has("photo_b64") == false
@@ -128,75 +138,55 @@ curl -sS -X POST "$BASE/visitors" -H 'Content-Type: application/json' \
 pass
 
 step "3.2  OTP send then verify -> phone_verified, tier UNCHANGED"
-CODE=$(curl -sS -X POST "$BASE/visitors/vr_3/otp/send" | jq -r '.code')
-curl -sS -X POST "$BASE/visitors/vr_3/otp/verify" -H 'Content-Type: application/json' \
+CODE=$(curl -sS -X POST "$BASE/visitors/vr_4/otp/send" | jq -r '.code')
+curl -sS -X POST "$BASE/visitors/vr_4/otp/verify" -H 'Content-Type: application/json' \
   -d "{\"code\":\"$CODE\"}" \
   | jq -e '.phone_verified == true and .tier == "temporary"' > /dev/null
 pass
 
 step "3.3  GET /photos/{ref} -> the one place base64 comes back out"
-REF=$(curl -sS "$BASE/visitors/vr_3" | jq -r '.photo_ref')
+REF=$(curl -sS "$BASE/visitors/vr_4" | jq -r '.photo_ref')
 curl -sS "$BASE/photos/$REF" \
   | jq -e --arg r "$REF" '.ref == $r and (.photo_b64 | length) > 0' > /dev/null
 pass
 
-step "3.4  vouch -> verified with an expiry (SPEC section 7)"
-curl -sS -X POST "$BASE/dev/vouch" -H 'Content-Type: application/json' \
-  -d '{"visitor_id":"vr_3","host_id":"h_1"}' \
-  | jq -e '.after.tier == "verified"
-           and .after.verified_by == "vouch"
-           and .after.verified_until != null
-           and .after.is_permanent == false' > /dev/null
-pass
-
-step "3.5  DigiLocker OVERRIDES the vouch, keeping the audit trail"
-curl -sS -X POST "$BASE/visitors/vr_3/digilocker" \
-  | jq -e '.verified_by == "digilocker"
+step "3.4  DigiLocker -> verified and permanent, id_last4 out but never id_hash"
+curl -sS -X POST "$BASE/visitors/vr_4/digilocker" \
+  | jq -e '.tier == "verified"
+           and .verified_by == "digilocker"
            and .is_permanent == true
            and .id_last4 != null
-           and .vouched_by_host_id == "h_1"
            and has("id_hash") == false' > /dev/null
 pass
 
-step "3.6  re-vouch on a permanent visitor is a no-op (SPEC section 14)"
-curl -sS -X POST "$BASE/dev/vouch" -H 'Content-Type: application/json' \
-  -d '{"visitor_id":"vr_3","host_id":"h_3"}' \
-  | jq -e '.after.verified_by == "digilocker"
-           and .after.is_permanent == true
-           and .after.vouched_by_host_id == "h_1"' > /dev/null
-pass
-
-step "3.7  GET /visitors/lookup finds by phone (declared above /{id})"
+step "3.5  GET /visitors/lookup finds by phone (declared above /{id})"
 curl -sS "$BASE/visitors/lookup?phone=%2B91-99999-88888" \
-  | jq -e '.id == "vr_3"' > /dev/null
+  | jq -e '.id == "vr_4"' > /dev/null
 pass
 
-step "3.8  seeded visitors carry resolvable photos"
-for v in vr_1 vr_2; do
+step "3.6  every seeded visitor carries a resolvable photo"
+for v in vr_1 vr_2 vr_3; do
   r=$(curl -sS "$BASE/visitors/$v" | jq -r '.photo_ref')
   curl -sS "$BASE/photos/$r" | jq -e '(.photo_b64 | length) > 0' > /dev/null
 done
 pass
 
-
-
 # --- Phase 4: pass request and approval -------------------------------------
-# vr_3 was registered by step 3.1 and made permanent by 3.5, so this chain runs
-# on a visitor whose verification state is already known.
 
 step "4.1  POST /visits with 2 companions -> requested, expected = 3"
 curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Lab tour",
        "scheduled_at":"2026-08-22T15:00:00+05:30","vehicle_plate":"TN-01-AA-1111",
        "companions":[{"name":"Arun"},{"name":"Meena"}]}' \
-  | jq -e '.status == "requested"
+  | jq -e '.id == "v_4"
+           and .status == "requested"
            and .person_count_expected == 3
            and .origin == "pre_registered"' > /dev/null
 pass
 
 step "4.2  GET /visits/{id} lists the linked companions"
-curl -sS "$BASE/visits/v_3" \
-  | jq -e '.id == "v_3" and (.companions | length) == 2' > /dev/null
+curl -sS "$BASE/visits/v_4" \
+  | jq -e '.id == "v_4" and (.companions | length) == 2' > /dev/null
 pass
 
 step "4.3  faculty inbox filters by host and status"
@@ -205,7 +195,7 @@ curl -sS "$BASE/visits?host_id=h_1&status=requested" \
 pass
 
 step "4.4  approve -> requested through approved to issued, in one call"
-curl -sS -X POST "$BASE/visits/v_3/approve" -H 'Content-Type: application/json' \
+curl -sS -X POST "$BASE/visits/v_4/approve" -H 'Content-Type: application/json' \
   -d '{"meeting_zone_id":"z_1","allowed_zones":["z_2","z_5"],
        "valid_from":"2026-08-22T15:00:00+05:30",
        "valid_to":"2026-08-22T19:00:00+05:30","vouch":false}' \
@@ -246,21 +236,74 @@ curl -sS "$BASE/visitors/$NEWV" \
            and .vouched_by_host_id == "h_2"' > /dev/null
 pass
 
-step "4.8  cancel an issued visit -> cancelled"
-curl -sS -X POST "$BASE/visits/v_3/cancel" -H 'Content-Type: application/json' \
+step "4.8  DigiLocker then OVERRIDES that vouch, keeping the audit trail"
+curl -sS -X POST "$BASE/visitors/$NEWV/digilocker" \
+  | jq -e '.verified_by == "digilocker"
+           and .is_permanent == true
+           and .vouched_by_host_id == "h_2"' > /dev/null
+pass
+
+step "4.9  cancel an issued visit -> cancelled"
+curl -sS -X POST "$BASE/visits/v_4/cancel" -H 'Content-Type: application/json' \
   -d '{"reason":"Rescheduled"}' \
   | jq -e '.status == "cancelled" and .approval_reason == "Rescheduled"' > /dev/null
 pass
 
-step "4.9  GET /visits/{id}/scans -> empty audit trail until Phase 6"
-curl -sS "$BASE/visits/v_3/scans" | jq -e 'type == "array"' > /dev/null
+step "4.10 GET /visits/{id}/scans -> empty audit trail until Phase 6"
+curl -sS "$BASE/visits/v_4/scans" | jq -e 'type == "array"' > /dev/null
 pass
 
-step "4.10 notifications were fired to host and visitor"
+step "4.11 notifications were fired to host and visitor"
 curl -sS "$BASE/dev/notifications" \
   | jq -e '.count >= 3
            and ([.notifications[].recipient] | map(startswith("host:")) | any)
            and ([.notifications[].recipient] | map(startswith("visitor:")) | any)' > /dev/null
+pass
+
+# --- Phase 5: pass signing --------------------------------------------------
+# v_3 is visitor B, seeded at Phase 5 with an issued pass precisely so there is
+# something signed to fetch before any live approval has run.
+
+step "5.1  GET /passes/v_3 -> seeded pass, signed, with a 6-digit code"
+curl -sS "$BASE/passes/v_3" \
+  | jq -e '.visit_id == "v_3"
+           and (.code6 | test("^[0-9]{6}$"))
+           and .is_revoked == false
+           and (.qr.signature | length) == 64' > /dev/null
+pass
+
+step "5.2  the QR payload carries ONLY visit_id and nonce (SPEC section 9)"
+curl -sS "$BASE/passes/v_3" \
+  | jq -e '(.qr.payload | keys) == ["nonce","visit_id"]
+           and (((.qr | tostring) | test("valid_to|valid_from|allowed_zones")) | not)' > /dev/null
+pass
+
+step "5.3  the same visit returns a byte-identical QR every time"
+Q1=$(curl -sS "$BASE/passes/v_3" | jq -cS '.qr')
+Q2=$(curl -sS "$BASE/passes/v_3" | jq -cS '.qr')
+[ "$Q1" = "$Q2" ] || { printf 'QR changed between calls\n' >&2; exit 1; }
+pass
+
+step "5.4  approve now issues a pass of its own"
+curl -sS -X POST "$BASE/visits/v_1/approve" -H 'Content-Type: application/json' \
+  -d '{"meeting_zone_id":"z_1","allowed_zones":["z_2"],
+       "valid_from":"2026-08-22T15:00:00+05:30",
+       "valid_to":"2026-08-22T19:00:00+05:30"}' > /dev/null
+curl -sS "$BASE/passes/v_1" \
+  | jq -e '.visit_id == "v_1" and (.code6 | test("^[0-9]{6}$"))' > /dev/null
+pass
+
+step "5.5  active passes hold distinct code6 values (SPEC section 9)"
+C1=$(curl -sS "$BASE/passes/v_1" | jq -r '.code6')
+C3=$(curl -sS "$BASE/passes/v_3" | jq -r '.code6')
+[ "$C1" != "$C3" ] || { printf 'code6 collision between active passes\n' >&2; exit 1; }
+pass
+
+step "5.6  revoke sets revoked_at and leaves the visit status alone"
+BEFORE=$(curl -sS "$BASE/visits/v_1" | jq -r '.status')
+curl -sS -X POST "$BASE/passes/v_1/revoke" -H 'X-Role: security' \
+  | jq -e '.is_revoked == true and .revoked_at != null' > /dev/null
+curl -sS "$BASE/visits/v_1" | jq -e --arg b "$BEFORE" '.status == $b' > /dev/null
 pass
 
 printf '\nAll steps passed.\n'

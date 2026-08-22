@@ -30,7 +30,7 @@ from app.repositories import (
     visitor_repo,
     zone_repo,
 )
-from app.services import visitor_service
+from app.services import pass_service, visitor_service
 from app.store import ids
 from app.store.entities import Companion, Visit
 
@@ -327,9 +327,9 @@ def approve_visit(
     The acting host is the visit's own host_id, not the caller - SPEC section
     16.1: the header establishes the ROLE, the path establishes the IDENTITY.
 
-    NO PASS RECORD IS CREATED HERE. Signing is Phase 5, and a Pass needs a
-    signature and a code6 that only that phase can produce. The visit reaches
-    `issued` and Phase 5 fills in the pass behind it.
+    The pass is issued as part of reaching `issued` - SPEC section 10 ends
+    approve with "pass generated". Phase 5 added that; through Phase 4 the
+    visit reached `issued` with nothing behind it.
     """
     visit = visit_repo.get_or_404(visit_id)
 
@@ -370,11 +370,14 @@ def approve_visit(
 
     transition(visit, "issued", actor)
 
+    # SPEC section 10: the pass is generated in the same call as approve.
+    issued = pass_service.issue_pass(visit.id)
+
     visitor = visitor_repo.get_or_404(visit.visitor_id)
     notifications.notify_visitor(
         visitor,
         f"Visit {visit.id} approved. Valid {valid_from.isoformat()} "
-        f"to {valid_to.isoformat()}.",
+        f"to {valid_to.isoformat()}. Fallback code {issued.code6}.",
     )
 
     return visit
