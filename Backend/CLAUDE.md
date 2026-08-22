@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 10 — Exit & close-out
-PHASES_COMPLETE: 0,1,2,3,4,5,6,8,9
+NEXT_PHASE: 13 — Dashboards
+PHASES_COMPLETE: 0,1,2,3,4,5,6,8,9,10
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 9 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 10 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -268,3 +268,10 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[9]` `meeting-point` is legal while `issued` or `inside`, anything else 400 `InvalidRequest`. The status does not change, so it is a domain rule rather than a transition.
 - `[9]` The zone scan deliberately does NOT check revocation or the pass window, unlike the gate. §14 says revoking blocks future ENTRY scans and never ejects anyone already inside, and §10's zone block plus §14 decide exactly three outcomes — an invented `expired` result would alarm every checkpoint over an overstay §11's dashboard already reports.
 - `[9]` The zone-scan response carries `people` and a readable `allowed_zones`. §10 requires faces at the gate and at exit but is silent here; a checkpoint guard does the same job, and the zone list is the field that visibly changes while the QR does not.
+- `[10]` A partial exit leaves `exit_at` NULL and a full exit sets it — SPEC §10 was silent, now written into it. §11 derives `overstaying` from `exit_at` being null, so stamping an exit time while part of a group is still on campus would silence that alarm.
+- `[10]` Close-out leaves `exit_at` null and a normal exit scan leaves `closed_reason` null — SPEC §10 was silent, now written into it. The pair is what makes the two endings distinguishable, and `closed with exit_at null` is the only possible source for the honesty panel's "visits closed without an exit scan".
+- `[10]` `person_count_out` is optional and read as a full exit when omitted, mirroring `person_count_in` at the gate. A guard who did not count has not reported a discrepancy, and inventing a partial exit from silence would raise an alarm over paperwork. Written into SPEC §10.
+- `[10]` When `person_count_in` is null the exit compares against `person_count_expected` — SPEC said compare to `count_in` without saying what happens when there is not one. Written into SPEC §10.
+- `[10]` The exit scan checks neither revocation nor the pass window. §14 states the revocation half outright; the window half is new, because an overstaying visitor is exactly the person who needs to leave and refusing them would strand them inside the record permanently. Written into SPEC §10.
+- `[10]` Close-out reasons are a constrained vocabulary in `visit_service.CLOSE_REASONS`, rejected with 400 outside it, while reject and cancel keep free text. Free text here would make the honesty panel's close-out count unreadable.
+- `[10]` Phase 10 was verified against `GET /visits?status=inside` rather than `/dashboard/inside`, which CLAUDE.md's verification line names but which is a Phase 13 endpoint. Same records, no build-ahead.
