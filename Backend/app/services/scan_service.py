@@ -79,8 +79,11 @@ def _record(
     return event
 
 
-def _people_for(visit) -> list[dict]:
+def people_for(visit) -> list[dict]:
     """Every linked person on a visit, visitor first.
+
+    Public because the dashboard renders the same faces the guard sees, and two
+    definitions of "who is on this visit" would drift apart.
 
     This is what the guard compares against the faces in front of them, so it
     leads the response. Refs only, never base64 (SPEC section 16.5).
@@ -284,7 +287,7 @@ def gate_entry(
         "admitted": True,
         "result": "ok",
         "message": f"Admitted. {visitor.name if visitor else 'Visitor'} may proceed.",
-        "people": _people_for(visit),
+        "people": people_for(visit),
         "vehicle": {
             "expected": expected_plate,
             "presented": vehicle_plate,
@@ -395,7 +398,7 @@ def zone_scan(
         if visit.meeting_zone_id
         else None,
         "allowed_zones": _zone_labels(visit.allowed_zones),
-        "people": _people_for(visit),
+        "people": people_for(visit),
     }
 
     # --- not inside ---------------------------------------------------------
@@ -505,7 +508,7 @@ def gate_exit(
             "result": "wrong_status",
             "message": f"Visit {visit.id} is {visit.status}, not inside. "
             "There is nobody to sign out.",
-            "people": _people_for(visit),
+            "people": people_for(visit),
             "visit_id": visit.id,
             "visitor_name": visitor.name if visitor else None,
             "visit_status": visit.status,
@@ -582,7 +585,7 @@ def gate_exit(
         "exited": not short,
         "result": "ok",
         "message": message,
-        "people": _people_for(visit),
+        "people": people_for(visit),
         "vehicle": {
             "expected": expected_plate,
             "presented": vehicle_plate_out,

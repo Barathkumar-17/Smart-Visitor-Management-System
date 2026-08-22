@@ -671,4 +671,132 @@ curl -sS "$BASE/visits/v_3/scans" \
                     and .count_mismatch == true and .person_count_recorded == 2)' > /dev/null
 pass
 
+# --- Phase 13: dashboards ----------------------------------------------------
+# OPENS WITH ITS OWN RESET. By this point the script has signed out or closed
+# almost every seeded visitor, so the dashboards would correctly report an
+# empty campus. The seeded state is the fixture these three endpoints exist to
+# render, so it is restored first.
+
+step "13.0  reset, so the campus is populated again"
+curl -sS -X POST "$BASE/dev/reset" > /dev/null
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e 'length == 4' > /dev/null
+pass
+
+step "13.1  inside is sorted by entry_at ascending - longest inside first"
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e '.[0].visit_id == "v_6"
+           and .[0].minutes_inside > .[1].minutes_inside
+           and .[1].minutes_inside > .[2].minutes_inside
+           and .[2].minutes_inside > .[3].minutes_inside' > /dev/null
+pass
+
+step "13.2  every row carries all six flags, false ones included"
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e 'all(.[]; (.flags | keys | sort) ==
+                    ["host_not_acked","no_destination_scan","overstaying",
+                     "partial_exit","restricted","wrong_zone_scan"])' > /dev/null
+pass
+
+step "13.3  each seeded visitor shows the flag they were seeded to show"
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e 'INDEX(.visit_id) as $r
+           | $r["v_2"].flags.restricted == true
+           and $r["v_4"].flags.host_not_acked == true
+           and $r["v_5"].flags.wrong_zone_scan == true
+           and $r["v_6"].flags.overstaying == true' > /dev/null
+pass
+
+step "13.4  the flags are DERIVED - the visit record stores none of them"
+curl -sS "$BASE/visits/v_6" \
+  | jq -e 'has("overstaying") == false
+           and has("host_not_acked") == false
+           and has("wrong_zone_scan") == false
+           and has("partial_exit") == false
+           and .status == "inside" and .valid_to != null and .exit_at == null' > /dev/null
+pass
+
+step "13.5  exceptions returns all five lists, four of them populated"
+curl -sS "$BASE/dashboard/exceptions" -H 'X-Role: security' \
+  | jq -e '(keys | sort) == ["awaiting_host_ack","no_destination_scan","overstaying",
+                             "partial_exit","wrong_zone"]
+           and (.overstaying | length) >= 1
+           and (.no_destination_scan | length) >= 1
+           and (.wrong_zone | length) >= 1
+           and (.awaiting_host_ack | length) >= 1' > /dev/null
+pass
+
+step "13.6  a visit appears on SEVERAL lists - they are not merged or ranked"
+curl -sS "$BASE/dashboard/exceptions" -H 'X-Role: security' \
+  | jq -e 'any(.overstaying[]; .visit_id == "v_6")
+           and any(.awaiting_host_ack[]; .visit_id == "v_6")' > /dev/null
+pass
+
+step "13.7  every exception row says WHY it is on the list"
+curl -sS "$BASE/dashboard/exceptions" -H 'X-Role: security' \
+  | jq -e '[.[][]] | length > 0 and all(.[]; .detail != null and (.detail | length) > 10)' > /dev/null
+pass
+
+step "13.8  honesty returns EVERY field, zeros included"
+curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' \
+  | jq -e 'has("closed_without_exit_scan") and has("currently_overstaying")
+           and has("wrong_zone_scans_today") and has("entries_made_offline")
+           and has("restricted_admissions_by_approver")
+           and has("walk_ins_denied_after_escalation")
+           and has("average_host_approval_minutes_by_department")
+           and has("average_host_ack_minutes_by_department")
+           and .walk_ins_denied_after_escalation == 0
+           and .currently_overstaying == 1
+           and .wrong_zone_scans_today == 1' > /dev/null
+pass
+
+step "13.9  and names every field it cannot fill, rather than hiding it"
+curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' \
+  | jq -e '(.unavailable | keys | length) >= 2
+           and (.unavailable.walk_ins_denied_after_escalation | test("deferred"))' > /dev/null
+pass
+
+step "13.10  restricted admissions is an honest zero - this build performs none"
+# Seeded visitor C carries the restricted STATE so the dashboard flag has
+# something to render, but no admission was ever performed: fallback-decision
+# is Phase 12 and deferred. The flag and the count answer different questions,
+# which is why one is true while the other is zero.
+curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' \
+  | jq -e '(.restricted_admissions_by_approver | length) == 0' > /dev/null
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e 'INDEX(.visit_id)["v_2"].flags.restricted == true' > /dev/null
+pass
+
+step "13.11  a live partial exit fills the one list the seed leaves empty"
+curl -sS -X POST "$BASE/scans/gate/entry" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_3" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_in:3}')" > /dev/null
+curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
+  -d "$(curl -sS "$BASE/passes/v_3" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_out:1}')" > /dev/null
+curl -sS "$BASE/dashboard/exceptions" -H 'X-Role: security' \
+  | jq -e 'any(.partial_exit[]; .visit_id == "v_3" and (.detail | test("2 still inside")))' > /dev/null
+pass
+
+step "13.12  the roles in SPEC 10 are enforced"
+curl -sS -o /dev/null -w '%{http_code}' "$BASE/dashboard/inside" -H 'X-Role: guard' \
+  | grep -q '^403$' || { printf 'a guard reached /dashboard/inside\n' >&2; exit 1; }
+curl -sS -o /dev/null -w '%{http_code}' "$BASE/dashboard/honesty" -H 'X-Role: security' \
+  | grep -q '^403$' || { printf 'security reached the honesty panel\n' >&2; exit 1; }
+pass
+
+step "13.13  advancing the clock moves what today means, per SPEC 11"
+curl -sS -X POST "$BASE/dev/reset" > /dev/null
+curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' | jq -e '.wrong_zone_scans_today == 1' > /dev/null
+curl -sS -X POST "$BASE/dev/advance-clock" -H 'Content-Type: application/json' \
+  -d '{"minutes":1440}' > /dev/null
+curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' | jq -e '.wrong_zone_scans_today == 0' > /dev/null
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' \
+  | jq -e 'INDEX(.visit_id)["v_5"].flags.wrong_zone_scan == false' > /dev/null
+pass
+
+step "13.14  reset restores both the store and the clock, ready to demo"
+curl -sS -X POST "$BASE/dev/reset" > /dev/null
+curl -sS "$BASE/health" | jq -e '.clock_offset_minutes == 0' > /dev/null
+curl -sS "$BASE/dashboard/inside" -H 'X-Role: security' | jq -e 'length == 4' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'
