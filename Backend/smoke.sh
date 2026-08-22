@@ -179,4 +179,88 @@ done
 pass
 
 
+
+# --- Phase 4: pass request and approval -------------------------------------
+# vr_3 was registered by step 3.1 and made permanent by 3.5, so this chain runs
+# on a visitor whose verification state is already known.
+
+step "4.1  POST /visits with 2 companions -> requested, expected = 3"
+curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
+  -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Lab tour",
+       "scheduled_at":"2026-08-22T15:00:00+05:30","vehicle_plate":"TN-01-AA-1111",
+       "companions":[{"name":"Arun"},{"name":"Meena"}]}' \
+  | jq -e '.status == "requested"
+           and .person_count_expected == 3
+           and .origin == "pre_registered"' > /dev/null
+pass
+
+step "4.2  GET /visits/{id} lists the linked companions"
+curl -sS "$BASE/visits/v_3" \
+  | jq -e '.id == "v_3" and (.companions | length) == 2' > /dev/null
+pass
+
+step "4.3  faculty inbox filters by host and status"
+curl -sS "$BASE/visits?host_id=h_1&status=requested" \
+  | jq -e 'length >= 1 and all(.[]; .host_id == "h_1" and .status == "requested")' > /dev/null
+pass
+
+step "4.4  approve -> requested through approved to issued, in one call"
+curl -sS -X POST "$BASE/visits/v_3/approve" -H 'Content-Type: application/json' \
+  -d '{"meeting_zone_id":"z_1","allowed_zones":["z_2","z_5"],
+       "valid_from":"2026-08-22T15:00:00+05:30",
+       "valid_to":"2026-08-22T19:00:00+05:30","vouch":false}' \
+  | jq -e '.status == "issued"
+           and .approved_by == "faculty:h_1"
+           and .meeting_zone_id == "z_1"
+           and (.allowed_zones | index("z_1")) != null' > /dev/null
+pass
+
+step "4.5  four companions is legal (1 + 4 = 5 total, SPEC section 6)"
+curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
+  -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Group of five",
+       "scheduled_at":"2026-08-23T10:00:00+05:30",
+       "companions":[{"name":"a"},{"name":"b"},{"name":"c"},{"name":"d"}]}' \
+  | jq -e '.person_count_expected == 5' > /dev/null
+pass
+
+step "4.6  person_count path -> used as-is, no companion records"
+curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
+  -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Large group",
+       "scheduled_at":"2026-08-23T11:00:00+05:30","person_count":12}' \
+  | jq -e '.person_count_expected == 12' > /dev/null
+pass
+
+step "4.7  approve with vouch verifies an unverified visitor (SPEC section 7)"
+NEWV=$(curl -sS -X POST "$BASE/visitors" -H 'Content-Type: application/json' \
+  -d '{"name":"Kavitha S","phone":"+91-98400-33333"}' | jq -r '.id')
+NEWVIS=$(curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
+  -d "{\"visitor_id\":\"$NEWV\",\"host_id\":\"h_2\",\"purpose\":\"Vouched visit\",
+       \"scheduled_at\":\"2026-08-22T16:00:00+05:30\"}" | jq -r '.id')
+curl -sS -X POST "$BASE/visits/$NEWVIS/approve" -H 'Content-Type: application/json' \
+  -d '{"meeting_zone_id":"z_1","allowed_zones":[],
+       "valid_from":"2026-08-22T15:00:00+05:30",
+       "valid_to":"2026-08-22T19:00:00+05:30","vouch":true}' > /dev/null
+curl -sS "$BASE/visitors/$NEWV" \
+  | jq -e '.tier == "verified"
+           and .verified_by == "vouch"
+           and .vouched_by_host_id == "h_2"' > /dev/null
+pass
+
+step "4.8  cancel an issued visit -> cancelled"
+curl -sS -X POST "$BASE/visits/v_3/cancel" -H 'Content-Type: application/json' \
+  -d '{"reason":"Rescheduled"}' \
+  | jq -e '.status == "cancelled" and .approval_reason == "Rescheduled"' > /dev/null
+pass
+
+step "4.9  GET /visits/{id}/scans -> empty audit trail until Phase 6"
+curl -sS "$BASE/visits/v_3/scans" | jq -e 'type == "array"' > /dev/null
+pass
+
+step "4.10 notifications were fired to host and visitor"
+curl -sS "$BASE/dev/notifications" \
+  | jq -e '.count >= 3
+           and ([.notifications[].recipient] | map(startswith("host:")) | any)
+           and ([.notifications[].recipient] | map(startswith("visitor:")) | any)' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'

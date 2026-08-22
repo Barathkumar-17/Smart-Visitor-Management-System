@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 3 — Registration
-PHASES_COMPLETE: 0,1,2
+NEXT_PHASE: 4 — Request & approval
+PHASES_COMPLETE: 0,1,2,3
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 2 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 3 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -232,3 +232,12 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[2]` `transition()`'s `actor` is logged, never stored — no entity in §6 has a field for it, so the server log is the audit trail. `main.py` gained `logging.basicConfig(INFO)` because uvicorn leaves root at WARNING and was silently dropping every successful transition, keeping only failures.
 - `[2]` SPEC §13 updated — seed is now written at phase 1 and extended at phases **3**, 5 and 6. Photos need the Phase 3 storage stub; a ref written earlier would be a dangling pointer.
 - `[2]` `visit_service` derives terminal statuses from the transition table and raises at import if they disagree with `visit_repo.TERMINAL_STATUSES`, which `pass_repo` needs for the code6 rule. Repos cannot import services, so the two sets stay separate but cannot drift.
+- `[3]` Added `POST /dev/vouch` — prototype-only, not in SPEC §10's dev list. §7 bans a standalone vouch endpoint on the PRODUCTION surface; at Phase 3 nothing else can create a vouch, so the §7 override rule was untestable. Same precedent as `/dev/transition`. Delete when Phase 4's approve makes it redundant.
+- `[3]` `GET /visitors/lookup` built at Phase 3 — it is in §10's Visitors block (Phase 3's assigned section) though it primarily serves the deferred walk-in flow. Building it now also locks in the declare-above-`/{id}` ordering permanently.
+- `[3]` `MAX_PHOTO_BYTES` added to `core/config.py` — §12's table omits it, but §16.5 fixes the 2 MB cap and §12 forbids hardcoding limits in services.
+- `[3]` `photo` added to `ids.PREFIXES` so refs are `photo_{n}` per §16.5 and are deterministic across `/dev/reset`.
+- `[3]` `GET /photos/{ref}` lives on a second router inside `routers/visitors.py` — §16.8 fixes the router file list, so it gets a prefix-free `APIRouter` rather than a new module.
+- `[3]` `POST /visitors/{id}/otp/send` returns the code — §10 does not say what it returns, and a demo has no phone to read it off. A real gateway returns a receipt and the field disappears.
+- `[3]` DigiLocker override RETAINS `vouched_by_host_id` and `verified_until` — §7 requires both queryable so administration can trace who vouched for a visitor who later causes problems. Erasing them on upgrade would destroy that record.
+- `[3]` `POST /visitors` requires only `name` and `phone`; address, email and photo are optional. §3 describes a full registration, but blocking a partial record adds a rule with no safety value.
+- `[3]` `.gitignore` added at the repository root and 35 tracked `__pycache__` files untracked. Not a SPEC matter; recorded because it changes what a fresh clone contains.

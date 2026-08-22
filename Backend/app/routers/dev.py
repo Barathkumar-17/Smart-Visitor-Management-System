@@ -16,6 +16,7 @@ from app.core import clock
 from app.core.security import require_role
 from app.repositories import (
     host_repo,
+    notification_repo,
     scan_repo,
     visit_repo,
     visitor_repo,
@@ -161,6 +162,29 @@ async def force_vouch(body: VouchRequest) -> dict[str, Any]:
             ),
             "is_permanent": visitor.is_permanent,
         },
+    }
+
+
+@router.get("/notifications")
+async def list_notifications() -> dict[str, Any]:
+    """Everything the notification stub "sent". SPEC section 10.
+
+    The stub logs and appends rather than delivering, so this is how a demo
+    shows who WOULD have been contacted - the host on a new request, the
+    visitor on approval, security on an exception.
+    """
+    sent = notification_repo.list_all()
+    return {
+        "count": len(sent),
+        "notifications": [
+            {
+                "id": n.id,
+                "recipient": n.recipient,
+                "message": n.message,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in sent
+        ],
     }
 
 
