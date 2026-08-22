@@ -1,4 +1,4 @@
-"""Zone storage access. SPEC section 5.
+"""Zone storage access.
 
 The ONLY code that knows Zone records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file
@@ -45,7 +45,7 @@ def count() -> int:
 
 
 def find_by_code(code: str) -> Zone | None:
-    """Zone scans arrive with a zone_code, not an id. SPEC section 10."""
+    """Zone scans arrive with a zone_code, not an id."""
     with memory.lock:
         for zone in memory.zones.values():
             if zone.code == code:

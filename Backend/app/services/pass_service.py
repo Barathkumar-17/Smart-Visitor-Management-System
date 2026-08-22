@@ -1,4 +1,4 @@
-"""Pass issue, code6 and revoke. SPEC section 9.
+"""Pass issue, code6 and revoke.
 
 A Pass is the signed QR payload plus the 6-digit fallback code. It is created
 by approval (and, in the full system, by a fallback admission) and is the thing
@@ -21,7 +21,7 @@ CODE6_MAX_ATTEMPTS = 50
 
 
 def generate_code6() -> str:
-    """A 6-digit code unique among ACTIVE passes. SPEC section 9.
+    """A 6-digit code unique among ACTIVE passes.
 
     A pass is active while revoked_at is null AND its visit is not in a
     terminal state. Codes are freely reused once the owning visit is terminal -
@@ -49,7 +49,7 @@ def generate_code6() -> str:
 
 
 def issue_pass(visit_id: str) -> Pass:
-    """Create and sign the pass for a visit. Called by approve. SPEC section 9.
+    """Create and sign the pass for a visit. Called by approve.
 
     One pass per visit: if one already exists it is returned unchanged rather
     than reissued, so nothing can silently invalidate a QR a visitor is already
@@ -104,11 +104,11 @@ def build_qr_payload(issued: Pass) -> dict:
 
 
 def revoke_pass(visit_id: str, actor: str = "security:u_security") -> Pass:
-    """Revoke a pass. SPEC sections 8 and 10.
+    """Revoke a pass.
 
     Sets revoked_at and NOTHING ELSE. It does not change the visit's status,
     does not eject anyone already inside, and does not stop them leaving:
-    SPEC section 14 is explicit that revocation prevents FUTURE entry scans,
+    the design is explicit that revocation prevents FUTURE entry scans,
     and that exit still works. Ejecting someone is a decision for a person at
     the gate, not a side effect of a database write.
 
@@ -143,7 +143,7 @@ def resolve_scan(
     """Resolve a scan to its pass, by signed payload OR by 6-digit code.
 
     Returns (pass, result) where result is "ok", "bad_signature" or a marker
-    that no pass matched. It does NOT raise for a bad signature: SPEC section 8
+    that no pass matched. It does NOT raise for a bad signature: the design
     requires every scan endpoint to return 200 carrying its outcome so the
     ScanEvent can never be lost to an early exit.
 

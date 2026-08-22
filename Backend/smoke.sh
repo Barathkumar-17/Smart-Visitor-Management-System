@@ -88,7 +88,7 @@ curl -sS "$BASE/visitors/vr_2" \
 pass
 
 # --- Phase 2: state machine -------------------------------------------------
-# The full legal lifecycle on v_1, one row of the SPEC section 8 table per step.
+# The full legal lifecycle on v_1, one row of the table per step.
 # v_2 is deliberately untouched: that is visitor C, and Phase 8 needs her still
 # inside and unacknowledged.
 
@@ -205,7 +205,7 @@ curl -sS -X POST "$BASE/visits/v_7/approve" -H 'Content-Type: application/json' 
            and (.allowed_zones | index("z_1")) != null' > /dev/null
 pass
 
-step "4.5  four companions is legal (1 + 4 = 5 total, SPEC section 6)"
+step "4.5  four companions is legal (1 + 4 = 5 total)"
 curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Group of five",
        "scheduled_at":"2026-08-23T10:00:00+05:30",
@@ -220,7 +220,7 @@ curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   | jq -e '.person_count_expected == 12' > /dev/null
 pass
 
-step "4.7  approve with vouch verifies an unverified visitor (SPEC section 7)"
+step "4.7  approve with vouch verifies an unverified visitor"
 NEWV=$(curl -sS -X POST "$BASE/visitors" -H 'Content-Type: application/json' \
   -d '{"name":"Kavitha S","phone":"+91-98400-33333"}' | jq -r '.id')
 NEWVIS=$(curl -sS -X POST "$BASE/visits" -H 'Content-Type: application/json' \
@@ -272,7 +272,7 @@ curl -sS "$BASE/passes/v_3" \
            and (.qr.signature | length) == 64' > /dev/null
 pass
 
-step "5.2  the QR payload carries ONLY visit_id and nonce (SPEC section 9)"
+step "5.2  the QR payload carries ONLY visit_id and nonce"
 curl -sS "$BASE/passes/v_3" \
   | jq -e '(.qr.payload | keys) == ["nonce","visit_id"]
            and (((.qr | tostring) | test("valid_to|valid_from|allowed_zones")) | not)' > /dev/null
@@ -293,7 +293,7 @@ curl -sS "$BASE/passes/v_1" \
   | jq -e '.visit_id == "v_1" and (.code6 | test("^[0-9]{6}$"))' > /dev/null
 pass
 
-step "5.5  active passes hold distinct code6 values (SPEC section 9)"
+step "5.5  active passes hold distinct code6 values"
 C1=$(curl -sS "$BASE/passes/v_1" | jq -r '.code6')
 C3=$(curl -sS "$BASE/passes/v_3" | jq -r '.code6')
 [ "$C1" != "$C3" ] || { printf 'code6 collision between active passes\n' >&2; exit 1; }
@@ -404,7 +404,7 @@ curl -sS -X POST "$BASE/scans/gate/entry" -H 'Content-Type: application/json' -H
   | jq -e '.admitted == false and .result == "revoked"' > /dev/null
 pass
 
-step "6.9  every refusal still wrote a ScanEvent (SPEC section 6)"
+step "6.9  every refusal still wrote a ScanEvent"
 curl -sS "$BASE/visits/v_3/scans" \
   | jq -e 'length >= 1 and any(.[]; .result == "revoked")' > /dev/null
 pass
@@ -446,7 +446,7 @@ curl -sS -X POST "$BASE/visits/v_2/arrival-ack" \
            and (.allowed_zones | index("z_1")) != null' > /dev/null
 pass
 
-step "8.4  THE PROOF - the QR is byte-identical after (SPEC section 9)"
+step "8.4  THE PROOF - the QR is byte-identical after"
 QR_AFTER=$(curl -sS "$BASE/passes/v_2" | jq -cS '.qr')
 C6_AFTER=$(curl -sS "$BASE/passes/v_2" | jq -r '.code6')
 [ "$QR_BEFORE" = "$QR_AFTER" ] \
@@ -515,7 +515,7 @@ curl -sS -X PATCH "$BASE/visits/v_4/meeting-point" \
            and (.allowed_zones | index("z_5")) == null' > /dev/null
 pass
 
-step "9.5  THE PROOF - the QR is byte-identical after the move (SPEC section 9)"
+step "9.5  THE PROOF - the QR is byte-identical after the move"
 QR9_AFTER=$(curl -sS "$BASE/passes/v_4" | jq -cS '.qr')
 C69_AFTER=$(curl -sS "$BASE/passes/v_4" | jq -r '.code6')
 [ "$QR9_BEFORE" = "$QR9_AFTER" ] \
@@ -549,7 +549,7 @@ curl -sS -X POST "$BASE/scans/zone" -H 'Content-Type: application/json' -H 'X-Ro
   | jq -e '.ok == false and .result == "wrong_status" and .scan_event_id != null' > /dev/null
 N9_AFTER=$(curl -sS "$BASE/dev/notifications" | jq '.notifications | length')
 [ "$N9_BEFORE" = "$N9_AFTER" ] \
-  || { printf 'a wrong_status zone scan notified somebody - SPEC 14 says nobody\n' >&2; exit 1; }
+  || { printf 'a wrong_status zone scan notified somebody - it must notify nobody\n' >&2; exit 1; }
 pass
 
 step "9.10  an unknown zone code is the one 400 on this endpoint"
@@ -608,7 +608,7 @@ curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 
            and .exit_at == null' > /dev/null
 pass
 
-step "10.6  SPEC 11's partial_exit condition derives true on the record itself"
+step "10.6  the partial_exit condition derives true on the record itself"
 curl -sS "$BASE/visits/v_3" \
   | jq -e '.status == "inside"
            and .person_count_out != null
@@ -649,7 +649,7 @@ curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/visits/v_2/close" \
   | grep -q '^400$' || { printf 'a close reason outside the vocabulary was accepted\n' >&2; exit 1; }
 pass
 
-step "10.12  SPEC 14 - MORE people out than in closes normally, flagged not blocked"
+step "10.12  MORE people out than in closes normally, flagged not blocked"
 curl -sS -X POST "$BASE/scans/gate/exit" -H 'Content-Type: application/json' -H 'X-Role: guard' \
   -d "$(curl -sS "$BASE/passes/v_2" | jq -c '{payload:.qr.payload, signature:.qr.signature, person_count_out:2}')" \
   | jq -e '.exited == true
@@ -776,14 +776,14 @@ curl -sS "$BASE/dashboard/exceptions" -H 'X-Role: security' \
   | jq -e 'any(.partial_exit[]; .visit_id == "v_3" and (.detail | test("2 still inside")))' > /dev/null
 pass
 
-step "13.12  the roles in SPEC 10 are enforced"
+step "13.12  the documented roles are enforced"
 curl -sS -o /dev/null -w '%{http_code}' "$BASE/dashboard/inside" -H 'X-Role: guard' \
   | grep -q '^403$' || { printf 'a guard reached /dashboard/inside\n' >&2; exit 1; }
 curl -sS -o /dev/null -w '%{http_code}' "$BASE/dashboard/honesty" -H 'X-Role: security' \
   | grep -q '^403$' || { printf 'security reached the honesty panel\n' >&2; exit 1; }
 pass
 
-step "13.13  advancing the clock moves what today means, per SPEC 11"
+step "13.13  advancing the clock moves what today means"
 curl -sS -X POST "$BASE/dev/reset" > /dev/null
 curl -sS "$BASE/dashboard/honesty" -H 'X-Role: admin' | jq -e '.wrong_zone_scans_today == 1' > /dev/null
 curl -sS -X POST "$BASE/dev/advance-clock" -H 'Content-Type: application/json' \

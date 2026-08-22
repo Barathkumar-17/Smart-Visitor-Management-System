@@ -1,4 +1,4 @@
-"""FastAPI app and router registration. SPEC section 16.8.
+"""FastAPI app and router registration.
 
 Run with: uvicorn app.main:app --reload
 
@@ -19,7 +19,7 @@ from app.routers import dashboard, dev, passes, reference, scans, visitors, visi
 from app.store import seed
 
 # The state machine writes one audit line per status change, naming the actor
-# (SPEC section 16.2). No entity in SPEC section 6 stores that string, so the
+#. No entity stores that string, so the
 # log IS the audit trail - and uvicorn leaves the root logger at WARNING, which
 # would silently drop every successful transition and keep only the failures.
 logging.basicConfig(
@@ -32,14 +32,14 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     """Load the seed before the first request.
 
-    SPEC section 13: the prototype must be demoable the moment it starts, so
+    the prototype must be demoable the moment it starts, so
     the store is never empty. /dev/reset reloads exactly the same data.
     """
     if DEFAULT_HMAC_SECRET_IN_USE:
         logging.getLogger("app.core.config").warning(
             "HMAC_SECRET is the built-in development default. Every pass "
             "signature is forgeable by anyone with this repository. Set "
-            "HMAC_SECRET in .env before running this anywhere reachable."
+            "HMAC_SECRET in.env before running this anywhere reachable."
         )
     seed.load()
     yield
@@ -52,7 +52,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# The single domain exception handler required by SPEC section 15. Registered
+# The single domain exception handler required by the design. Registered
 # on the base class so every subclass in core/errors.py routes through it.
 app.add_exception_handler(DomainError, domain_error_handler)
 
@@ -70,7 +70,7 @@ app.include_router(dev.router)
 async def health() -> dict[str, Any]:
     """Liveness, plus the current clock so /dev/advance-clock is observable.
 
-    `now` is the canonical aware-UTC value per SPEC section 16.7. `now_local`
+    `now` is the canonical aware-UTC value. `now_local`
     and `clock_offset_minutes` are there to be read by a human during manual
     testing - they are presentation, not new state.
     """

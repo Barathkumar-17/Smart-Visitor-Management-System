@@ -1,10 +1,10 @@
-"""Notification stub. SPEC section 5.
+"""Notification stub.
 
 Signature correct, implementation fake: logs the recipient and message, and
 appends to the notifications list so a demo can SHOW what was sent. Real
 deployment swaps the body for email or SMS and changes nothing else.
 
-Recipients are free-text strings, not ids, because SPEC section 16.3 requires
+Recipients are free-text strings, not ids, because the design requires
 some of them to be addressed to things that are not host records at all -
 "department:Computer Science", "admin_block", "security_desk".
 """

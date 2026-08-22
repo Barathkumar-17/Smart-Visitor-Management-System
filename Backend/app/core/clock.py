@@ -1,4 +1,4 @@
-"""The single source of current time. SPEC sections 15 and 16.7.
+"""The single source of current time.
 
 NO CODE ANYWHERE ELSE MAY CALL datetime.now(). Every time read in the system
 goes through now() here, because /dev/advance-clock works by shifting the
@@ -27,7 +27,7 @@ def now() -> datetime:
 def now_local() -> datetime:
     """now() converted into LOCAL_TZ. For display and for "today" comparisons.
 
-    Same instant as now(), different presentation. SPEC section 16.7 evaluates
+    Same instant as now(), different presentation.7 evaluates
     WORKING_HOURS and every "today" rule in LOCAL_TZ, never in UTC.
     """
     return now().astimezone(ZoneInfo(LOCAL_TZ))
@@ -47,7 +47,7 @@ def advance(minutes: int) -> timedelta:
     """Shift the clock forward. Returns the new cumulative offset.
 
     Advancing past 17:00 local reroutes fallback escalation from admin to
-    security. That is intended and demoable, not a bug. SPEC section 16.7.
+    security. That is intended and demoable, not a bug.
     """
     global _offset
     _offset += timedelta(minutes=minutes)

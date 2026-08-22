@@ -1,4 +1,4 @@
-"""Photo storage stub, base64 in / ref out. SPEC sections 5 and 16.5.
+"""Photo storage stub, base64 in / ref out.
 
 Signature correct, implementation fake: the base64 stays in a module-level dict
 in RAM and a fake ref comes back. Swapping in S3 or a filesystem later replaces
@@ -19,7 +19,7 @@ from app.store import ids
 
 log = logging.getLogger(__name__)
 
-# ref -> base64 string. Deliberately NOT in store/memory.py: SPEC section 5
+# ref -> base64 string. Deliberately NOT in store/memory.py: the design
 # lists the store collections and photos are not among them. Cleared by
 # /dev/reset through clear().
 _photos: dict[str, str] = {}

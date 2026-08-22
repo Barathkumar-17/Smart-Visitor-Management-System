@@ -1,4 +1,4 @@
-"""Visitor endpoints. SPEC section 10.
+"""Visitor endpoints.
 
 ROUTE ORDER MATTERS HERE. GET /visitors/lookup is declared ABOVE
 GET /visitors/{visitor_id} on purpose. Reverse them and FastAPI matches the
@@ -6,8 +6,7 @@ literal string "lookup" as a visitor id, and the endpoint becomes permanently
 unreachable while still appearing in the schema - a bug that looks like a
 missing feature.
 
-GET /photos/{ref} lives here too, on its own prefix-free router. SPEC section
-16.5 puts it "alongside registration", and SPEC section 16.8 fixes the router
+GET /photos/{ref} lives here too, on its own prefix-free router.5 puts it "alongside registration", and the design fixes the router
 file list, so it gets a second APIRouter rather than a new module.
 """
 
@@ -32,7 +31,7 @@ photos_router = APIRouter(tags=["photos"])
 
 @router.post("", response_model=VisitorOut, status_code=201)
 async def register_visitor(body: VisitorCreate):
-    """Register a visitor. Creates tier `temporary`. SPEC section 10.
+    """Register a visitor. Creates tier `temporary`.
 
     Verification is a separate step: DigiLocker below, or a host vouch at
     approval (Phase 4). Registering alone confers no standing.
@@ -62,7 +61,7 @@ async def lookup_visitor(
 
 @router.post("/{visitor_id}/otp/send", response_model=OtpSendResponse)
 async def send_otp(visitor_id: str):
-    """Send an OTP to the visitor's phone. SPEC section 10."""
+    """Send an OTP to the visitor's phone."""
     visitor = visitor_service.get_visitor(visitor_id)
     code = visitor_service.send_otp(visitor_id)
     return OtpSendResponse(visitor_id=visitor.id, phone=visitor.phone, code=code)
@@ -71,14 +70,14 @@ async def send_otp(visitor_id: str):
 @router.post("/{visitor_id}/otp/verify", response_model=VisitorOut)
 async def verify_otp(visitor_id: str, body: OtpVerifyRequest):
     """Set phone_verified. Verifies the PHONE, not the person - it does not
-    change tier. SPEC section 10."""
+    change tier."""
     return visitor_service.verify_otp(visitor_id, body.code)
 
 
 @router.post("/{visitor_id}/digilocker", response_model=VisitorOut)
 async def verify_digilocker(visitor_id: str):
     """DigiLocker consent stub. Sets verified and permanent, and OVERRIDES ANY
-    EXISTING VOUCH. SPEC sections 7 and 10.
+    EXISTING VOUCH.
 
     Sets id_hash on the entity, which no response ever returns; id_last4 comes
     back and is the part a guard may see.
@@ -88,16 +87,16 @@ async def verify_digilocker(visitor_id: str):
 
 @router.get("/{visitor_id}", response_model=VisitorOut)
 async def get_visitor(visitor_id: str):
-    """One visitor. NEVER returns id_hash - see VisitorOut. SPEC section 15."""
+    """One visitor. NEVER returns id_hash - see VisitorOut."""
     return visitor_service.get_visitor(visitor_id)
 
 
 @photos_router.get("/photos/{ref}", response_model=PhotoOut)
 async def get_photo(ref: str):
-    """The pixels for a photo ref. SPEC section 16.5.
+    """The pixels for a photo ref.
 
     No role marker, so any caller may fetch one - the guard's screen has to get
-    the image from somewhere, and section 10 requires the gate-entry response
+    the image from somewhere, and the design requires the gate-entry response
     to lead with faces. NotFound (404) when the ref does not resolve.
     """
     return PhotoOut(ref=ref, photo_b64=storage.get(ref))

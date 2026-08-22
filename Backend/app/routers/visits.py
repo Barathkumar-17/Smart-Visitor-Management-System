@@ -1,9 +1,9 @@
-"""Visit endpoints. SPEC section 10.
+"""Visit endpoints.
 
 Routers parse, check the role, call a service and return a schema. Every rule
 here - the companion cap, the mutual exclusion of companions and person_count,
 who may vouch, which statuses accept a reject - lives in visit_service, not
-below. SPEC section 15 forbids a status check in a router, and there is not one
+below. The design forbids a status check in a router, and there is not one
 in this file: reject and cancel are legal only from certain statuses, and the
 state machine enforces that by raising IllegalTransition.
 """
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 
 @router.post("", response_model=VisitOut, status_code=201)
 async def create_visit(body: VisitCreate):
-    """Pre-registered pass request. Status `requested`. SPEC section 10.
+    """Pre-registered pass request. Status `requested`.
 
     Returns 409 VisitorAlreadyInside when the visitor is inside on another
     visit, 400 CompanionLimitExceeded beyond four companions, and 400
@@ -56,7 +56,7 @@ async def list_visits(
     ),
     _user=Depends(require_role("faculty")),
 ):
-    """The faculty inbox. SPEC section 10."""
+    """The faculty inbox."""
     return visit_service.list_visits(host_id=host_id, status=status, date=date)
 
 
@@ -71,10 +71,10 @@ async def get_visit(visit_id: str):
 
 @router.get("/{visit_id}/scans", response_model=list[ScanEventOut])
 async def get_visit_scans(visit_id: str):
-    """The audit trail for one visit. SPEC section 10.
+    """The audit trail for one visit.
 
     Empty until Phase 6 writes the first ScanEvent. It is exposed now because
-    section 10 lists it under Visits, and an endpoint that returns an honest
+    the design lists it under Visits, and an endpoint that returns an honest
     empty list is better than one that 404s until a later phase.
     """
     visit_service.get_visit(visit_id)
@@ -85,13 +85,13 @@ async def get_visit_scans(visit_id: str):
 async def approve_visit(
     visit_id: str, body: ApproveRequest, _user=Depends(require_role("faculty"))
 ):
-    """Approve: requested -> approved -> issued in one call. SPEC section 10.
+    """Approve: requested -> approved -> issued in one call.
 
-    If `vouch` is true the SPEC section 7 rules are applied to the visitor -
+    If `vouch` is true the the design rules are applied to the visitor -
     this is the ONLY production path that vouches for anyone.
 
     The acting host is the visit's host_id, not the caller: the header
-    establishes the role, the path establishes the identity (SPEC section 16.1).
+    establishes the role, the path establishes the identity.
     """
     return visit_service.approve_visit(
         visit_id=visit_id,
@@ -107,9 +107,7 @@ async def approve_visit(
 async def arrival_ack(
     visit_id: str, body: ArrivalAckRequest, _user=Depends(require_role("faculty"))
 ):
-    """The host confirms availability, and lifts a restriction if there is one.
-
-    SPEC sections 4.4 and 10. The visitor is never held at the gate waiting for
+    """The host confirms availability, and lifts a restriction if there is one. The visitor is never held at the gate waiting for
     this - they entered already, and this only decides how far they may go and
     for how long.
 
@@ -128,7 +126,7 @@ async def reject_visit(
     visit_id: str, body: ReasonRequest, _user=Depends(require_role("faculty"))
 ):
     """Reject a request. Legal only while `requested`; any other status gives
-    409 from the state machine. SPEC section 10."""
+    409 from the state machine."""
     return visit_service.reject_visit(visit_id, body.reason)
 
 
@@ -137,7 +135,7 @@ async def cancel_visit(
     visit_id: str, body: ReasonRequest, _user=Depends(require_role("faculty"))
 ):
     """Call off a visit already approved and issued. Legal only while `issued`,
-    never once `inside`. Distinct from a security revoke. SPEC section 10."""
+    never once `inside`. Distinct from a security revoke."""
     return visit_service.cancel_visit(visit_id, body.reason)
 
 
@@ -147,9 +145,9 @@ async def change_meeting_point(
 ):
     """Move the meeting on a pass the visitor is already carrying.
 
-    SPEC section 10: this endpoint exists to prove the pointer-not-payload
+    this endpoint exists to prove the pointer-not-payload
     design, and it MUST NOT reissue the QR. It does not touch the pass at all -
-    zones are not in the signed payload (SPEC section 9), so the next scan
+    zones are not in the signed payload, so the next scan
     reads this record fresh and the QR is byte-identical either side.
     """
     return visit_service.change_meeting_point(
@@ -163,7 +161,7 @@ async def change_meeting_point(
 async def close_visit(
     visit_id: str, body: CloseRequest, _user=Depends(require_role("guard"))
 ):
-    """End-of-day close-out. SPEC sections 4.3 and 10.
+    """End-of-day close-out.
 
     The guard's sweep for whatever the exit scan could not resolve. Legal only
     from `inside` - the state machine returns 409 from anywhere else - and it

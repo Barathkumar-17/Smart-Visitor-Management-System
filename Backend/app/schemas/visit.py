@@ -1,4 +1,4 @@
-"""Visit request and response models. SPEC sections 10, 16.4 and 16.7."""
+"""Visit request and response models."""
 
 from datetime import datetime
 
@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _require_aware(value: datetime | None) -> datetime | None:
-    """Reject a naive datetime. SPEC section 16.7.
+    """Reject a naive datetime.
 
     All API bodies use ISO 8601 WITH OFFSET. A naive timestamp is ambiguous -
     it would be read as UTC and silently shift a window by five and a half
@@ -21,7 +21,7 @@ def _require_aware(value: datetime | None) -> datetime | None:
 
 
 class CompanionIn(BaseModel):
-    """One linked companion on a pass request. SPEC sections 6 and 16.5."""
+    """One linked companion on a pass request."""
 
     name: str = Field(min_length=1)
     photo_b64: str | None = Field(
@@ -39,11 +39,11 @@ class CompanionOut(BaseModel):
 
 
 class VisitCreate(BaseModel):
-    """Pre-registered pass request. SPEC sections 10 and 16.4.
+    """Pre-registered pass request.
 
     companions[] and person_count are MUTUALLY EXCLUSIVE - supplying both is
     InvalidRequest, because the two would disagree about the group size and
-    nothing says which wins. See SPEC section 16.4 for the full table.
+    nothing says which wins. 4 for the full table.
     """
 
     visitor_id: str
@@ -66,9 +66,9 @@ class VisitCreate(BaseModel):
 
 
 class ApproveRequest(BaseModel):
-    """Host approval. SPEC section 10.
+    """Host approval.
 
-    `vouch` applies the SPEC section 7 rules to the visitor. Zones are ZONE IDS
+    `vouch` applies the the design rules to the visitor. Zones are ZONE IDS
     here, matching meeting_zone_id and the Visit entity; zone CODES are what
     the scan endpoints take, because a guard's scanner reads a code.
     """
@@ -86,7 +86,7 @@ class ApproveRequest(BaseModel):
 
 
 class ArrivalAckRequest(BaseModel):
-    """Host confirms availability. SPEC sections 4.4 and 10.
+    """Host confirms availability.
 
     Both fields are REQUIRED when the visit is restricted and IGNORED
     otherwise. A restricted visit is always a fallback admission - nothing else
@@ -102,7 +102,7 @@ class ArrivalAckRequest(BaseModel):
         default=None,
         description="Extended window end. Required if the visit is restricted. "
         "Changing it does NOT reissue the QR - the window is not in the signed "
-        "payload (SPEC section 9).",
+        "payload.",
     )
 
     _aware_to = field_validator("valid_to")(_require_aware)
@@ -168,7 +168,7 @@ class VisitOut(BaseModel):
 class VisitDetail(VisitOut):
     """A visit plus the people on it, for GET /visits/{id}.
 
-    The companion list is what makes a group visible: SPEC section 10 requires
+    The companion list is what makes a group visible: the design requires
     the gate-entry response to lead with every linked person, and this is the
     same data a host sees before approving.
     """
@@ -177,7 +177,7 @@ class VisitDetail(VisitOut):
 
 
 class MeetingPointRequest(BaseModel):
-    """Move the meeting on a pass already in someone's hand. SPEC section 10.
+    """Move the meeting on a pass already in someone's hand.
 
     Zone IDS, matching ApproveRequest - the host is picking from a list, while
     the scanner at a door reads a zone CODE.
@@ -196,7 +196,7 @@ class MeetingPointRequest(BaseModel):
 
 
 class CloseRequest(BaseModel):
-    """End-of-day close-out. SPEC section 10.
+    """End-of-day close-out.
 
     The reason is a CONSTRAINED vocabulary, unlike reject and cancel, which
     take free text. The honesty panel counts visits closed without an exit

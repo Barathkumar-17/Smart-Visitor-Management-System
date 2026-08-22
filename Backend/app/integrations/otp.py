@@ -1,4 +1,4 @@
-"""OTP send/verify stub. SPEC section 5.
+"""OTP send/verify stub.
 
 Signature correct, implementation fake. send_otp logs a code and returns it;
 verify_otp accepts ANY six digits, whatever was sent. Real deployment swaps the
@@ -26,7 +26,7 @@ def send_otp(phone: str) -> str:
 
 
 def verify_otp(phone: str, code: str) -> bool:
-    """Accept any six digits, per SPEC section 5.
+    """Accept any six digits.
 
     Nothing is stored between send and verify, so any correctly shaped code
     passes. That is the documented stub behaviour, not an oversight.

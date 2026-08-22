@@ -1,8 +1,7 @@
-"""Read-time derived flags. SPEC section 11.
+"""Read-time derived flags.
 
 NOTHING IN THIS FILE IS STORED. Every flag is computed from the visit record
-and its scan events at the moment it is asked for, using the definitions in
-SPEC section 11's table and no other arithmetic. SPEC section 11 says why: a
+and its scan events at the moment it is asked for, using the definitions table and no other arithmetic. The design says why: a
 stored flag and a derived one will drift apart, and the stored one will be the
 wrong one - it was true when it was written and nobody went back.
 
@@ -29,9 +28,9 @@ from app.services import scan_service
 log = logging.getLogger(__name__)
 
 
-# The six flags in SPEC section 11's table, in that order. Named here so the
+# The six flags table, in that order. Named here so the
 # dashboards cannot silently disagree about which flags exist.
-FLAG_NAMES: tuple[str, ...] = (
+FLAG_NAMES: tuple[str,...] = (
     "overstaying",
     "no_destination_scan",
     "wrong_zone_scan",
@@ -42,9 +41,9 @@ FLAG_NAMES: tuple[str, ...] = (
 
 
 def _today_local() -> _date:
-    """The LOCAL_TZ calendar day containing clock.now(). SPEC section 11.
+    """The LOCAL_TZ calendar day containing clock.now().
 
-    /dev/advance-clock moves what "today" means, which SPEC says is intended.
+    /dev/advance-clock moves what "today" means, which the design says is intended.
     """
     return clock.now_local().date()
 
@@ -56,10 +55,9 @@ def _is_today(moment: datetime | None) -> bool:
 
 
 def flags_for(visit, scans: list | None = None) -> dict[str, bool]:
-    """SPEC section 11's table, transcribed. Read it side by side with the spec.
+    """The six derived flags, transcribed exactly.
 
-    The `is not None` guards are not in the spec's wording and are not extra
-    rules: a visit forced to `inside` through /dev/transition never went
+    The `is not None` guards are not extra rules: a visit forced to `inside` through /dev/transition never went
     through the gate and has no entry_at, and comparing a timestamp to None
     would raise rather than return false. A missing timestamp means the
     condition cannot be shown to hold, so the flag is false.
@@ -113,10 +111,10 @@ def _minutes_since(moment: datetime | None) -> int | None:
 
 
 def inside() -> list[dict]:
-    """Who is on campus right now. SPEC section 10.
+    """Who is on campus right now.
 
     SORTED BY entry_at ASCENDING, so the person who has been inside longest is
-    at the top. That is the only ordering in the response - SPEC section 10 says
+    at the top. That is the only ordering in the response - the design says
     "flags only, no ranking", so a visitor with four flags does not jump the
     queue over one who has simply been here since morning.
     """
@@ -164,19 +162,19 @@ def _exception_row(visit, detail: str) -> dict:
 
 
 def exceptions() -> dict[str, list[dict]]:
-    """Five lists, SEPARATE AND UNRANKED. SPEC section 10.
+    """Five lists, SEPARATE AND UNRANKED.
 
     A visit appears in every list whose condition it meets, and the lists are
-    not merged into one ranked feed. SPEC section 10 is explicit about that,
+    not merged into one ranked feed. The design is explicit about that,
     and it is a real decision rather than laziness: merging would require
     deciding that overstaying beats a wrong-zone scan, and nothing in the
     system knows that. Security reads five short lists instead.
 
-    THE KEYS ARE SECTION 10'S NAMES, not section 11's flag names. Section 10
-    calls two of these lists `wrong_zone` and `awaiting_host_ack` where the
-    flag table calls the same conditions `wrong_zone_scan` and
-    `host_not_acked`. Same arithmetic, different labels, both spellings kept
-    where their own section put them.
+    TWO KEYS ARE SPELLED DIFFERENTLY FROM THEIR FLAGS. The lists here are
+    `wrong_zone` and `awaiting_host_ack`; the flags computed in flags_for()
+    call the same two conditions `wrong_zone_scan` and `host_not_acked`. Same
+    arithmetic, different labels, and both spellings are deliberate - the list
+    names read as categories, the flag names read as statements about a visit.
     """
     lists: dict[str, list[dict]] = {name: [] for name in
                                     ("overstaying", "no_destination_scan", "wrong_zone",
@@ -254,10 +252,10 @@ def _average_minutes_by_department(pairs: list[tuple[str, float]]) -> dict[str, 
 
 
 def honesty() -> dict:
-    """Counts, not charts. SPEC section 10.
+    """Counts, not charts.
 
     EVERY FIELD IS ALWAYS RETURNED. A count this build cannot produce comes
-    back as zero or an empty breakdown, never omitted - SPEC section 10: "A
+    back as zero or an empty breakdown, never omitted - "A
     panel that drops the fields it cannot fill defeats its own purpose."
 
     `unavailable` names each empty field and says WHY it is empty, which is the

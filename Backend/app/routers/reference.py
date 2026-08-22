@@ -1,8 +1,8 @@
-"""Reference data - GET /zones and GET /hosts. SPEC sections 10 and 16.8.
+"""Reference data - GET /zones and GET /hosts.
 
 Both are unguarded reads with no role marker, so any caller may fetch them.
 Neither has a business rule, so they read through their repository directly
-rather than via a service that would only forward the call. SPEC section 15
+rather than via a service that would only forward the call. The design
 permits this: what it forbids in a router is business LOGIC, and it explicitly
 contemplates a router reaching storage through a repository.
 """
@@ -24,5 +24,5 @@ async def list_zones() -> list:
 @router.get("/hosts", response_model=list[HostOut])
 async def list_hosts() -> list:
     """Every host, INCLUDING phone, so the guard can call one directly instead
-    of waiting on escalation. SPEC section 10."""
+    of waiting on escalation."""
     return host_repo.list_all()

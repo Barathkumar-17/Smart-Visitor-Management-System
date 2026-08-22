@@ -1,0 +1,205 @@
+# API reference
+
+Every endpoint, what it does, what comes back, and what it returns when it goes wrong.
+
+Base URL when running locally: `http://127.0.0.1:8000`
+
+For an explanation of what the system *is*, see [the README](../README.md). This file is for someone with the server running who wants to call it.
+
+---
+
+## Before you start
+
+**Roles.** Most endpoints want a role header. Leave it off and you are treated as `admin`, which passes every check.
+
+```powershell
+-Headers @{ "X-Role" = "guard" }
+```
+
+**Status codes.** There are only six things that come back.
+
+| Code | Meaning | Usually because |
+|---|---|---|
+| `200` | Fine | — |
+| `201` | Created | Only `POST /visitors` and `POST /visits` |
+| `400` | Your request broke a rule | `InvalidRequest`, `CompanionLimitExceeded` |
+| `403` | Wrong role | `NotPermitted` |
+| `404` | No such record | `NotFound` |
+| `409` | Right request, wrong moment | `IllegalTransition`, `VisitorAlreadyInside` |
+| `422` | Body is malformed | Missing field, or a timestamp with no timezone |
+
+**Every error looks like this**, so you can always find out what happened:
+
+```json
+{
+  "error": {
+    "code": "IllegalTransition",
+    "message": "Cannot move visit v_3 from closed to closed",
+    "detail": { "visit_id": "v_3", "from": "closed", "to": "closed" }
+  }
+}
+```
+
+The one exception is `422`, which keeps the framework's own format.
+
+**Scans never return an error for a refusal.** A forged pass, a revoked pass or somebody already inside all come back as `200` with a boolean saying no. This is on purpose: every scan attempt has to reach the permanent record, and an error status invites the caller to drop the request before it is written. Check `admitted` / `ok` / `exited`, not the status code.
+
+---
+
+## Registering a visitor
+
+| Endpoint | Role | What it does | Returns | If it fails |
+|---|---|---|---|---|
+| `POST /visitors` | any | Register someone. Only `name` and `phone` required | `201` + the visitor record | `400` photo over 2 MB · `422` name or phone missing |
+| `GET /visitors/{id}` | any | Everything known about one visitor | `200` + the record, including `tier` | `404` no such visitor |
+| `GET /visitors/lookup?phone=` | guard | Find a returning visitor by phone | `200` + the record, or `null` if none | — |
+| `POST /visitors/{id}/otp/send` | any | Send a one-time code | `200` + `{visitor_id, phone, code}` | `404` |
+| `POST /visitors/{id}/otp/verify` | any | Check the code, mark phone confirmed | `200` + `phone_verified: true` | `400` code is not six digits · `404` |
+| `POST /visitors/{id}/digilocker` | any | Verify government ID | `200` + `is_permanent: true`, `tier: verified` | `404` |
+| `GET /photos/{ref}` | any | Fetch a stored photograph | `200` + the image | `404` no such photo |
+
+> **`otp/verify` accepts any six digits.** It is a stub — nothing is stored between sending and checking, so only the *shape* is validated. See the security note in the README.
+
+---
+
+## Requesting a pass and approving it
+
+| Endpoint | Role | What it does | Returns | If it fails |
+|---|---|---|---|---|
+| `POST /visits` | any | Request a visit | `201` + the visit, status `requested` | `400` over 4 companions, or `companions` and `person_count` both sent · `404` unknown visitor or host · `409` visitor already inside · `422` timestamp without a timezone |
+| `GET /visits` | faculty | The staff inbox. Filter `?host_id=` `?status=` `?date=` | `200` + a list | `403` |
+| `GET /visits/{id}` | any | One visit and everyone on it | `200` + the visit plus `companions` | `404` |
+| `POST /visits/{id}/approve` | faculty | Set zones and window, issue the QR | `200` + the visit, status `issued` | `400` window ends before it starts, or unknown zone in the list · `404` unknown visit or meeting zone · `409` not `requested` |
+| `POST /visits/{id}/reject` | faculty | Turn down a request | `200` + status `rejected` | `409` not `requested` · `422` no reason given |
+| `POST /visits/{id}/cancel` | faculty | Call off an approved visit | `200` + status `cancelled` | `409` not `issued` |
+| `GET /visits/{id}/scans` | any | Every scan attempted, failures included | `200` + a list, oldest first | `404` |
+
+**Companions.** Up to four named people each get a photo. Beyond that use `person_count`, which is the **total including the visitor** — a visitor plus four companions is `5`. Sending both fields is a `400`.
+
+---
+
+## The pass
+
+| Endpoint | Role | What it does | Returns | If it fails |
+|---|---|---|---|---|
+| `GET /passes/{visit_id}` | any | The QR payload and the 6-digit backup | `200` + `{qr: {payload, signature}, code6}` | `404` no pass issued yet |
+| `POST /passes/{visit_id}/revoke` | security | Stop a pass admitting anyone | `200` + `revoked_at` set | `404` |
+
+The QR holds **only** `visit_id` and `nonce`. Zones and the expiry are read from the visit record at every scan, which is why moving a meeting never reissues the code. Revoking blocks future *entry*; it does not eject anyone already inside, and they can still scan out.
+
+---
+
+## Arriving, moving around, leaving
+
+All three scan endpoints return `200` even when the answer is no.
+
+| Endpoint | Role | What it does | Returns | If it fails |
+|---|---|---|---|---|
+| `POST /scans/gate/entry` | guard | Scan in at the gate | `200` + `admitted`, every face, vehicle and headcount comparison | `400` neither a payload nor a `code6` |
+| `POST /scans/zone` | guard | Scan at a checkpoint | `200` + `ok`, and `allowed_zones` read live | `400` unknown `zone_code`, or no payload and no `code6` |
+| `POST /scans/gate/exit` | guard | Scan out, counting people leaving | `200` + `exited`, `partial_exit`, `still_inside` | `400` neither a payload nor a `code6` |
+| `POST /visits/{id}/arrival-ack` | faculty | Host confirms they are free | `200` + `host_acked_at` set | `400` visit is not `inside`, or restricted and `allowed_zones`/`valid_to` missing · `404` |
+| `PATCH /visits/{id}/meeting-point` | faculty | Move the meeting. **Never reissues the QR** | `200` + new `meeting_zone_id` and `allowed_zones` | `400` visit is not `issued` or `inside` · `404` unknown zone or visit |
+| `POST /visits/{id}/close` | guard | End-of-day close-out | `200` + status `closed`, `closed_reason` set | `400` reason outside the four allowed · `409` not `inside` |
+
+**Scan bodies** take either `payload` + `signature` **as two top-level fields**, or `code6` on its own. Pasting the whole `qr` object in one piece is the most common `400` here — the two halves have to be separate.
+
+**Result values** you will see in `result`:
+
+| Value | Where | Means |
+|---|---|---|
+| `ok` | all three | The scan worked |
+| `bad_signature` | all three | Forged, altered, or a superseded code. **No scan event is written** — there is no trustworthy visit to attach it to |
+| `wrong_status` | all three | The visit is not in a state where this scan makes sense |
+| `revoked` | entry only | Pass was cancelled |
+| `expired` | entry only | Outside the pass window |
+| `already_inside` | entry only | This visitor is inside on a different visit |
+| `wrong_zone` | zone only | Not cleared for this checkpoint. Security notified, nobody stopped |
+
+**Mismatches are separate from the result.** A vehicle or headcount that doesn't match still comes back `ok` with `vehicle.mismatch` or `headcount.mismatch` true. Nothing is ever blocked over a mismatch.
+
+**Close-out reasons** must be one of `left_without_scanning`, `still_inside`, `partial_exit`, `system_error`.
+
+---
+
+## The dashboards
+
+| Endpoint | Role | What it does | Returns | If it fails |
+|---|---|---|---|---|
+| `GET /dashboard/inside` | security | Who is on campus, longest inside first | `200` + rows with all six flags | `403` guard or faculty |
+| `GET /dashboard/exceptions` | security | Five separate unmerged lists | `200` + `{overstaying, no_destination_scan, wrong_zone, partial_exit, awaiting_host_ack}` | `403` |
+| `GET /dashboard/honesty` | **admin** | Plain counts of what went wrong | `200` + every field, zeros included | `403` — security is refused here too |
+
+**The six flags**, all worked out at read time and stored nowhere:
+
+| Flag | True when |
+|---|---|
+| `overstaying` | Inside, no exit, and past `valid_to` |
+| `no_destination_scan` | Inside 30+ minutes with no successful checkpoint scan |
+| `wrong_zone_scan` | Scanned somewhere not on the pass, today |
+| `partial_exit` | Inside, and fewer people signed out than in |
+| `restricted` | The visit's `restricted` field |
+| `host_not_acked` | Inside 12+ minutes and the host has not confirmed |
+
+Two keys on the exceptions screen are spelled differently from their flags: `wrong_zone` and `awaiting_host_ack` are the same conditions as `wrong_zone_scan` and `host_not_acked`.
+
+---
+
+## Reference
+
+| Endpoint | Role | What it does | Returns |
+|---|---|---|---|
+| `GET /zones` | any | The five campus zones | `200` + `id`, `code`, `name` |
+| `GET /hosts` | any | Staff, with phone numbers | `200` + `id`, `name`, `department`, `phone` |
+| `GET /health` | any | Server is up, and the time it thinks it is | `200` + `status`, `now_local`, `clock_offset_minutes` |
+
+Zone **ids** (`z_2`) go in request bodies. Zone **codes** (`LIB`) go in scan bodies, because that is what a scanner at a door reads.
+
+---
+
+## For demonstrating only
+
+None of these would exist in a real deployment.
+
+| Endpoint | What it does | Returns |
+|---|---|---|
+| `POST /dev/reset` | Wipe and reload the starting campus, clock included | `200` + record counts |
+| `POST /dev/advance-clock` | Jump time forward by `{"minutes": N}` | `200` + the new time |
+| `POST /dev/transition` | Force a visit into any state | `200`, or `409` if the move is illegal |
+| `GET /dev/notifications` | Every message the system would have sent | `200` + a list |
+| `GET /dev/whoami` | Which role your header is granting | `200` |
+
+`/dev/reset` gives back identical ids every time — `z_1`–`z_5`, `h_1`–`h_3`, `vr_1`–`vr_6`, `v_1`–`v_6` — so any script can rely on them.
+
+---
+
+## Three PowerShell traps
+
+Windows PowerShell will bite you in three specific ways here. All three cost real time to work out from scratch.
+
+**1. Variable names ignore case.** `$b` and `$B` are the same variable. If your base URL is `$B`, never use `$b` for a body — the URL silently becomes a hashtable and you get *Invalid URI: The hostname could not be parsed*.
+
+**2. `Select` does not work; `Select-Object` does.** The alias returns blank rows.
+
+**3. Piping `Invoke-RestMethod` straight into `Select-Object` prints one empty row.** It hands the whole list over as a single item. Assign it first:
+
+```powershell
+$rows = Invoke-RestMethod "$B/dashboard/inside" -Headers @{ "X-Role" = "security" }
+$rows | Select-Object visitor_name, minutes_inside | Format-Table
+```
+
+**Building a scan body**, avoiding all three:
+
+```powershell
+$B = "http://127.0.0.1:8000"
+$qr = (Invoke-RestMethod "$B/passes/v_3").qr
+$json = @{ payload = $qr.payload; signature = $qr.signature; person_count_in = 3 } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post "$B/scans/gate/entry" -ContentType application/json `
+  -Headers @{ "X-Role" = "guard" } -Body $json
+```
+
+---
+
+## Poking at it in a browser
+
+`http://127.0.0.1:8000/docs` lists every endpoint with a **Try it out** button, fills in the body shape for you, and shows the exact response. For anything you only need to run once, it is faster than the terminal.

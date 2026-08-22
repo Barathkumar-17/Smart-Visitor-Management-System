@@ -1,4 +1,4 @@
-"""Seed loader. SPEC section 13.
+"""Seed loader.
 
 The prototype must be demoable the moment it starts, so this runs at startup
 and again on every /dev/reset.
@@ -78,7 +78,7 @@ def _placeholder_photo(rgb: tuple[int, int, int]) -> str:
     return base64.b64encode(png).decode()
 
 # --- Zones ------------------------------------------------------------------
-# The five from SPEC section 13.
+# The five.
 
 ZONES: list[tuple[str, str]] = [
     ("MAIN", "Main Block"),
@@ -89,10 +89,10 @@ ZONES: list[tuple[str, str]] = [
 ]
 
 # --- Hosts ------------------------------------------------------------------
-# Three across two departments, per SPEC section 13. The split is deliberate:
+# Three across two departments. The split is deliberate:
 # Computer Science has TWO hosts so a department escalation has a real
 # recipient to notify, and Mechanical Engineering has ONE so the "department
-# with no other host" path in SPEC section 16.3 - where a notification is still
+# with no other host" path - where a notification is still
 # written and the stage still advances - is reachable. Escalation is Phase 11
 # and deferred, but the fixture it will need exists now.
 
@@ -145,8 +145,8 @@ def _seed_visitor_a(hosts: list[Host]) -> None:
     """Visitor A - DigiLocker-verified, with a visit still `requested`.
 
     id_hash and id_last4 are set directly rather than through the DigiLocker
-    stub. CLAUDE.md requires A at Phase 1, two phases before that stub existed,
-    and SPEC section 13 defines her as DigiLocker-verified; the values are
+    stub. A is needed from the very first seed, two phases before that stub existed,
+    and the design defines her as DigiLocker-verified; the values are
     inert data of exactly the shape the stub produces.
 
     Her photo DOES go through storage.put(), added at Phase 3 - unlike an id
@@ -196,7 +196,7 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     nothing else to run against.
 
     Her shape follows what fallback-decision would have produced:
-      - approved_by is the fallback authority, not a host (SPEC 16.2 format)
+      - approved_by is the fallback authority, not a host (the design format)
       - approval_reason is required by that endpoint, so it is set
       - allowed_zones is the meeting zone ONLY; a fallback admission grants
         nothing wider
@@ -270,7 +270,7 @@ def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
 
     Her group is three - herself plus two companions - so the entry response
     leads with three faces and the guard's headcount has something to disagree
-    with. SPEC section 14: person_count_expected is the TOTAL, including her.
+    with. person_count_expected is the TOTAL, including her.
 
     Her vouch goes through visitor_service.apply_vouch rather than being
     written by hand, so the seeded record carries exactly the fields a real
@@ -318,7 +318,7 @@ def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
             )
         )
 
-    # Vouched by the host at approval, exactly as SPEC section 7 requires -
+    # Vouched by the host at approval, exactly as the design requires -
     # never pre-cleared ahead of the visit.
     visitor_service.apply_vouch(visitor, host.id, visit.origin)
 
@@ -346,7 +346,7 @@ def _clock_rewound_to(moment):
     D, E and F are all seeded as visitors who entered some time ago, and their
     entry_at and their ScanEvent created_at both have to reflect that. Setting
     those fields by hand afterwards would mean the seeded records did not come
-    from the code path live ones use, which SPEC section 13 forbids.
+    from the code path live ones use, which the design forbids.
 
     Rewinding the clock instead lets the REAL gate_entry run and stamp
     everything itself. The offset is restored on the way out, including if the
@@ -451,7 +451,7 @@ def _seed_inside_visitor(
 
 
 def _seed_visitors_d_e_f(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
-    """D, E and F - the three exception fixtures. SPEC section 13.
+    """D, E and F - the three exception fixtures.
 
     Each exists to make ONE dashboard flag reachable at Phase 13. Nothing in
     this build raises an exception flag live, because the jobs that would are
@@ -548,7 +548,7 @@ def load() -> None:
 def reset() -> None:
     """Clear everything and reseed - the whole of POST /dev/reset.
 
-    The clock offset goes back to zero too, per SPEC section 16.7, so a test
+    The clock offset goes back to zero too, so a test
     that advanced time does not leave the next one running in the future.
     """
     memory.clear_all()
@@ -563,5 +563,5 @@ def reset() -> None:
 # photo_ref was null on both seeded visitors through Phases 1 and 2, because
 # setting one needs integrations/storage.py. Phase 3 built that stub, so both
 # now go through storage.put() like any live registration and GET /photos/{ref}
-# resolves them. SPEC section 13 records Phase 3 as a seed-extension phase for
+# resolves them. The design records Phase 3 as a seed-extension phase for
 # exactly this reason.

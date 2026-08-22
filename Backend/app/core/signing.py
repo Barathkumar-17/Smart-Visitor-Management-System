@@ -1,4 +1,4 @@
-"""sign_pass / verify_pass. SPEC section 9.
+"""sign_pass / verify_pass.
 
 THE PAYLOAD CARRIES ONLY visit_id AND nonce. Never visitor data, never the zone
 list, and never the time window. Both of the latter are read fresh from the
@@ -37,7 +37,7 @@ def _canonical(payload: dict) -> bytes:
     which is the whole reason it exists. If the two sides serialised
     independently - different key order, a different separator, a stray space -
     every signature would fail to verify and the failure would look like a
-    tampered pass rather than a bug. SPEC section 9 calls this out explicitly.
+    tampered pass rather than a bug. The design calls this out explicitly.
 
     sort_keys makes key order irrelevant to the caller; the separators argument
     removes the whitespace json.dumps would otherwise insert.

@@ -1,10 +1,10 @@
-"""Scan endpoints. SPEC sections 8 and 10.
+"""Scan endpoints.
 
 EVERY ENDPOINT HERE RETURNS 200, including refusals. A bad signature, a revoked
 pass, a wrong status, a lapsed window and an already-inside visitor all come
 back as 200 with an explicit boolean and a result string - never as an error
-status. SPEC section 8 is explicit about why: a scan that raised would tempt a
-caller to abandon the request before the ScanEvent was written, and section 15
+status. The design is explicit about why: a scan that raised would tempt a
+caller to abandon the request before the ScanEvent was written, and the design
 requires that event either way.
 
 The one exception is a structurally unusable body - neither a payload nor a
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 @router.post("/gate/entry", response_model=GateEntryResponse)
 async def gate_entry(body: GateEntryRequest, _user=Depends(require_role("guard"))):
-    """The gate scan. SPEC section 10.
+    """The gate scan.
 
     Five checks in order - signature, not revoked, status issued, within
     window, not already inside - then admission. The response leads with every
@@ -51,13 +51,13 @@ async def gate_entry(body: GateEntryRequest, _user=Depends(require_role("guard")
 
 @router.post("/zone", response_model=ZoneScanResponse)
 async def zone_scan(body: ZoneScanRequest, _user=Depends(require_role("guard"))):
-    """A checkpoint scan inside the campus. SPEC section 10.
+    """A checkpoint scan inside the campus.
 
     Reads allowed_zones FRESH from the visit, never from the QR. In the list is
     `ok` and the host is told; not in the list is `wrong_zone` and security is
     told; neither is an error, and neither blocks anyone.
 
-    An unknown zone_code is the one 400 here - SPEC section 8 decides it - and
+    An unknown zone_code is the one 400 here - the design decides it - and
     it is a problem with the scanner, not with the visitor.
     """
     result = scan_service.zone_scan(
@@ -71,7 +71,7 @@ async def zone_scan(body: ZoneScanRequest, _user=Depends(require_role("guard")))
 
 @router.post("/gate/exit", response_model=GateExitResponse)
 async def gate_exit(body: GateExitRequest, _user=Depends(require_role("guard"))):
-    """The exit scan. SPEC sections 4.3 and 10.
+    """The exit scan.
 
     Photos shown again, plate compared against what actually entered, and the
     count decides whether the visit closes. A short count keeps the visit

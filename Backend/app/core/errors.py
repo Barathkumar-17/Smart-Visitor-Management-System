@@ -1,11 +1,11 @@
-"""Domain exceptions and the ONE FastAPI exception handler. SPEC sections 8, 15, 16.6.
+"""Domain exceptions and the ONE FastAPI exception handler.
 
 Routers raise none of these directly; services do. There are no scattered
 `raise HTTPException` calls anywhere in the codebase - every domain failure
 becomes an exception here and is mapped to its HTTP code in one place.
 
 SCAN ENDPOINTS NEVER USE THIS ENVELOPE. A scan failure returns 200 carrying its
-outcome, so the ScanEvent can never be lost to an early exit. SPEC section 8.
+outcome, so the ScanEvent can never be lost to an early exit.
 """
 
 from typing import Any
@@ -33,7 +33,7 @@ class NotFound(DomainError):
 
 
 class IllegalTransition(DomainError):
-    """transition() rejected a move not in the legal table. SPEC section 8."""
+    """transition() rejected a move not in the legal table."""
 
     status_code = 409
 
@@ -60,19 +60,19 @@ class VisitorAlreadyInside(DomainError):
     """Creating a visit or walk-in for a visitor already inside elsewhere.
 
     Distinct from the `already_inside` SCAN result, which is a 200 outcome on
-    the scan path. Same fact, two paths, two responses. SPEC section 8.
+    the scan path. Same fact, two paths, two responses.
     """
 
     status_code = 409
 
 
 async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
-    """The single handler required by SPEC section 15.
+    """The single handler required by the design.
 
     `code` is the exception class name verbatim so a test can assert on it
     without parsing prose. FastAPI's own 422 validation body is NOT rewritten
     into this envelope - a schema failure and a domain failure are different
-    animals and the difference is worth seeing. SPEC section 16.6.
+    animals and the difference is worth seeing.
     """
     body: dict[str, Any] = {
         "code": type(exc).__name__,

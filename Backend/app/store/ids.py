@@ -1,6 +1,4 @@
-"""Per-collection id counters, so no two repositories invent their own scheme.
-
-SPEC section 16.8. Ids are of the form `{prefix}_{n}` - v_1, h_2, z_3.
+"""Per-collection id counters, so no two repositories invent their own scheme. Ids are of the form `{prefix}_{n}` - v_1, h_2, z_3.
 """
 
 import threading
@@ -20,7 +18,7 @@ PREFIXES: dict[str, str] = {
     "pass": "p",
     "scan_event": "s",
     "notification": "n",
-    # Photo refs are "photo_{n}" per SPEC section 16.5, not an entity id, but
+    # Photo refs are "photo_{n}", not an entity id, but
     # the counter belongs here so /dev/reset makes refs deterministic too.
     "photo": "photo",
 }

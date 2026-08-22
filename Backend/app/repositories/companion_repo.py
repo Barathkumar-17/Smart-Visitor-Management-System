@@ -1,4 +1,4 @@
-"""Companion storage access. SPEC section 5.
+"""Companion storage access.
 
 The ONLY code that knows Companion records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file

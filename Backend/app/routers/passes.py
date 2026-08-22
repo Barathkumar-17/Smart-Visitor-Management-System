@@ -1,4 +1,4 @@
-"""Pass endpoints. SPEC section 10."""
+"""Pass endpoints."""
 
 from fastapi import APIRouter, Depends
 
@@ -26,7 +26,7 @@ def _to_out(issued) -> PassOut:
 
 @router.get("/{visit_id}", response_model=PassOut)
 async def get_pass(visit_id: str):
-    """The signed payload ready for QR encoding, plus code6. SPEC section 10.
+    """The signed payload ready for QR encoding, plus code6.
 
     The same visit returns a BYTE-IDENTICAL qr object every time, including
     after a meeting-point change or a window extension - neither is in the
@@ -37,10 +37,10 @@ async def get_pass(visit_id: str):
 
 @router.post("/{visit_id}/revoke", response_model=PassOut)
 async def revoke_pass(visit_id: str, user=Depends(require_role("security"))):
-    """Revoke a pass. Every scan checks revoked_at. SPEC section 10.
+    """Revoke a pass. Every scan checks revoked_at.
 
     Sets revoked_at only. The visit's status is untouched, and someone already
-    inside is neither ejected nor prevented from leaving - SPEC section 14.
+    inside is neither ejected nor prevented from leaving - the design.
     """
     return _to_out(
         pass_service.revoke_pass(visit_id, actor=f"{user['role']}:{user['id']}")

@@ -1,7 +1,6 @@
-"""Scan request and response models. SPEC sections 6, 10 and 14.
+"""Scan request and response models.
 
-The gate-entry response is the most-looked-at payload in this system. SPEC
-section 10: "Response leads with EVERY linked person's photo and details, the
+The gate-entry response is the most-looked-at payload in this system. The design: "Response leads with EVERY linked person's photo and details, the
 vehicle, and the expected headcount - the guard's job is comparing faces to a
 screen." So `people` comes first and carries a photo ref per person, and the
 comparisons the guard actually makes are grouped rather than scattered as loose
@@ -16,11 +15,11 @@ from app.schemas.pass_ import QrPayload
 
 
 class ScanEventOut(BaseModel):
-    """One entry in the audit trail. SPEC section 6.
+    """One entry in the audit trail.
 
     `result` says whether the SCAN succeeded. The mismatch flags sit ALONGSIDE
     it, never inside it: a gate entry whose plate differs is still result `ok`
-    with plate_mismatch true, because SPEC section 10 forbids ever blocking on
+    with plate_mismatch true, because the design forbids ever blocking on
     a mismatch and collapsing the two would hide that distinction.
     """
 
@@ -42,7 +41,7 @@ class PersonOut(BaseModel):
 
     photo_ref, never base64 - the pixels come from GET /photos/{ref}. A
     response leading with five inline photos would be megabytes of JSON on a
-    tablet at a gate (SPEC section 16.5).
+    tablet at a gate.
     """
 
     role: str = Field(description="visitor or companion")
@@ -66,7 +65,7 @@ class HeadcountCheck(BaseModel):
 
 
 class GateEntryRequest(BaseModel):
-    """SPEC section 10. Either a signed payload or the 6-digit code."""
+    """The design. Either a signed payload or the 6-digit code."""
 
     payload: QrPayload | None = None
     signature: str | None = None
@@ -88,8 +87,8 @@ class GateEntryResponse(BaseModel):
     """What the guard's screen renders.
 
     `admitted` is an explicit boolean and the response is ALWAYS 200, even when
-    the answer is no. SPEC section 8: a scan that raised would tempt a caller
-    to abandon the request before the ScanEvent was written, and section 15
+    the answer is no. a scan that raised would tempt a caller
+    to abandon the request before the ScanEvent was written, and the design
     requires that event either way.
     """
 
@@ -117,7 +116,7 @@ class GateEntryResponse(BaseModel):
 
 
 class ZoneScanRequest(BaseModel):
-    """A checkpoint scan. SPEC section 10.
+    """A checkpoint scan.
 
     zone_code is a CODE, not an id, because that is what a scanner at a door
     reads off its own configuration. Zone IDS are what the approve and
@@ -163,7 +162,7 @@ class ZoneScanResponse(BaseModel):
 
 
 class GateExitRequest(BaseModel):
-    """The exit scan. SPEC section 10.
+    """The exit scan.
 
     person_count_out is optional and read as a full exit when omitted, exactly
     as person_count_in is at the gate. A guard who did not count has not

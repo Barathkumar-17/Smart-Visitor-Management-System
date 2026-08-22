@@ -1,4 +1,4 @@
-"""Pass models. Underscored because `pass` is a keyword. SPEC section 9."""
+"""Pass models. Underscored because `pass` is a keyword."""
 
 from datetime import datetime
 
@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class QrPayload(BaseModel):
-    """Exactly what a QR encodes. SPEC section 9.
+    """Exactly what a QR encodes.
 
     visit_id and nonce, nothing else. No visitor data, no zone list, and above
     all no time window - all of it is read fresh from the record at scan time.
@@ -36,7 +36,7 @@ class PassOut(BaseModel):
 
 
 class ScanCredentials(BaseModel):
-    """Either half of the two ways to present a pass. SPEC section 10.
+    """Either half of the two ways to present a pass.
 
     Every scan endpoint accepts a signed payload OR the 6-digit code - the same
     service path, two lookups.

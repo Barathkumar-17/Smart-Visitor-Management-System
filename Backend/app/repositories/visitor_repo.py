@@ -1,4 +1,4 @@
-"""Visitor storage access. SPEC section 5.
+"""Visitor storage access.
 
 The ONLY code that knows Visitor records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file

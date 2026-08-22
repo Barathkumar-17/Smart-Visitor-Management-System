@@ -1,4 +1,4 @@
-"""Prototype-only endpoints. SPEC section 10.
+"""Prototype-only endpoints.
 
 Marked clearly and excluded from the main OpenAPI tags. None of this ships.
 
@@ -38,10 +38,10 @@ class TransitionRequest(BaseModel):
     visit_id: str
     # Deliberately a plain str, NOT a Literal of the known statuses. A Literal
     # would make FastAPI reject an unknown status with its own 422 before the
-    # service ever saw it, and the 409 that SPEC section 8 wants for a move the
+    # service ever saw it, and the 409 that the design wants for a move the
     # table rejects would become untestable.
     to_status: str = Field(
-        description="Target status. Anything the SPEC section 8 table does not "
+        description="Target status. Anything the the design table does not "
         "allow from the current status returns 409, including a status that "
         "does not exist."
     )
@@ -79,7 +79,7 @@ async def advance_clock(body: AdvanceClockRequest) -> dict[str, Any]:
 
     Lets a demo trigger escalation and overstay instantly instead of waiting 30
     real minutes. Advancing past 17:00 local reroutes fallback escalation from
-    admin to security - intended, not a bug. SPEC section 16.7.
+    admin to security - intended, not a bug.
     """
     before = clock.readable()
     offset = clock.advance(body.minutes)
@@ -94,13 +94,13 @@ async def advance_clock(body: AdvanceClockRequest) -> dict[str, Any]:
 
 @router.post("/transition")
 async def force_transition(body: TransitionRequest) -> dict[str, Any]:
-    """Drive the state machine directly. SPEC section 10.
+    """Drive the state machine directly.
 
     Exists so the machine is testable at Phase 2, before any real endpoint
     drives it - the first of those is POST /visits/{id}/approve at Phase 4 -
     and to force a visit into a given state during manual testing later.
 
-    The actor is "dev:forced" per SPEC section 16.2, so the log makes clear a
+    The actor is "dev:forced", so the log makes clear a
     move was forced rather than reached through the flow.
     """
     visit = visit_repo.get_or_404(body.visit_id)
@@ -119,7 +119,7 @@ async def force_transition(body: TransitionRequest) -> dict[str, Any]:
 
 @router.get("/notifications")
 async def list_notifications() -> dict[str, Any]:
-    """Everything the notification stub "sent". SPEC section 10.
+    """Everything the notification stub "sent".
 
     The stub logs and appends rather than delivering, so this is how a demo
     shows who WOULD have been contacted - the host on a new request, the
@@ -144,5 +144,5 @@ async def list_notifications() -> dict[str, Any]:
 async def whoami(user: dict[str, Any] = Depends(require_role("guard"))) -> dict[str, Any]:
     """Role-guarded probe so the 403 path stays verifiable without a real
     guard-only endpoint. Requires the guard role; an absent X-Role resolves to
-    admin and is permitted. SPEC section 16.1."""
+    admin and is permitted."""
     return {"user": user}

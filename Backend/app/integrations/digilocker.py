@@ -1,4 +1,4 @@
-"""DigiLocker consent stub. SPEC section 5.
+"""DigiLocker consent stub.
 
 Signature correct, implementation fake: returns a plausible ID hash and last-4
 without contacting anything. Real deployment replaces the body with the consent
@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 def fetch_identity(phone: str) -> dict[str, str]:
     """Return the identity fields DigiLocker would supply.
 
-    id_hash NEVER leaves the backend in an API response - SPEC section 15
+    id_hash NEVER leaves the backend in an API response - the design
     forbids it, and the visitor schema simply has no field for it. id_last4 is
     the part a guard may see.
     """

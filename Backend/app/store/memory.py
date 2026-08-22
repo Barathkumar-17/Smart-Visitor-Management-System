@@ -1,4 +1,4 @@
-"""The store. Dicts keyed by id, plus two append-only lists. SPEC section 5.
+"""The store. Dicts keyed by id, plus two append-only lists.
 
 SERVICES AND ROUTERS MUST NEVER TOUCH THESE. Every read and write goes through
 a repository function. Repositories are the only code that knows storage is a

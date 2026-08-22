@@ -1,15 +1,15 @@
-"""Gate entry, zone and exit scans. SPEC sections 10 and 14.
+"""Gate entry, zone and exit scans.
 
 TWO RULES GOVERN EVERYTHING IN THIS FILE.
 
-1. A ScanEvent is written for EVERY attempt, successful or not. SPEC section 6
+1. A ScanEvent is written for EVERY attempt, successful or not. The design
    calls this the most important collection in the system, and says a later
    scoring phase's feasibility depends on its completeness now. Failures are
    data, not errors to discard.
 
 2. NO SCAN EVER RAISES for a business outcome. Every entry point returns its
    result, and the router turns that into a 200 carrying an explicit boolean.
-   SPEC section 8: a scan that raised would tempt a caller to abandon the
+   a scan that raised would tempt a caller to abandon the
    request before the event was written.
 
 Phase 6 implements gate entry and Phase 9 the zone scan. Both end at _record()
@@ -53,7 +53,7 @@ def _record(
     """The single ScanEvent writer. Every scan path in the system ends here.
 
     Also used by the seed loader, so seeded history has exactly the shape live
-    scans produce - SPEC section 13 requires that explicitly.
+    scans produce - the design requires that explicitly.
     """
     event = scan_repo.add(
         ScanEvent(
@@ -86,7 +86,7 @@ def people_for(visit) -> list[dict]:
     definitions of "who is on this visit" would drift apart.
 
     This is what the guard compares against the faces in front of them, so it
-    leads the response. Refs only, never base64 (SPEC section 16.5).
+    leads the response. Refs only, never base64.
     """
     visitor = visitor_repo.get(visit.visitor_id)
     people = []
@@ -134,7 +134,7 @@ def gate_entry(
     entered_offline: bool = False,
     authorised_by: str | None = None,
 ) -> dict:
-    """The gate scan. SPEC section 10.
+    """The gate scan.
 
     FIVE CHECKS, IN THIS ORDER, and the order matters - each one presumes the
     previous passed:
@@ -149,8 +149,7 @@ def gate_entry(
     raises.
 
     A plate or headcount mismatch is NOT a failure. It is recorded on both the
-    response and the event, and the visitor is admitted anyway - SPEC section
-    10 forbids ever blocking on one. The count is evidence, not a gate.
+    response and the event, and the visitor is admitted anyway - the design forbids ever blocking on one. The count is evidence, not a gate.
     """
     # --- 1. signature or code6 ---------------------------------------------
     issued, lookup = pass_service.resolve_scan(payload, signature, code6)
@@ -216,7 +215,7 @@ def gate_entry(
         )
 
     # --- 5. not already inside on another visit -----------------------------
-    # SPEC section 14: the SCANNED visit is left completely untouched, still
+    # the SCANNED visit is left completely untouched, still
     # `issued`, and the event is written against IT rather than against the
     # visit the person is currently inside on.
     elsewhere = visit_repo.find_inside_for_visitor(visit.visitor_id, exclude_visit_id=visit.id)
@@ -331,40 +330,39 @@ def zone_scan(
     signature: str | None = None,
     code6: str | None = None,
 ) -> dict:
-    """A checkpoint scan somewhere inside the campus. SPEC section 10.
+    """A checkpoint scan somewhere inside the campus.
 
-    THIS ENDPOINT NEVER BLOCKS ANYONE. SPEC section 10 says so outright: it
+    THIS ENDPOINT NEVER BLOCKS ANYONE. The design says so outright: it
     records and returns what happened. There is no barrier here to hold shut -
     the person is already inside - so refusing would achieve nothing except
     losing the evidence that they were somewhere unexpected.
 
     allowed_zones IS READ FRESH FROM THE VISIT, never from the QR. That single
-    line is the whole point of the pointer-not-payload design in SPEC section
-    9: a host moves the meeting point, the visitor's QR does not change by one
+    line is the whole point of the pointer-not-payload design in the design: a host moves the meeting point, the visitor's QR does not change by one
     byte, and the very next scan at the new zone comes back ok while the old
     one starts flagging.
 
     Outcomes, in the order they are decided:
 
-      unknown zone_code   -> InvalidRequest (400). SPEC section 8 decides this
+      unknown zone_code   -> InvalidRequest (400). The design decides this
                              one. There is no zone to record an event against.
       signature fails     -> bad_signature, no event - no trustworthy visit id
       visit not `inside`  -> wrong_status, event written, NOBODY notified
-                             (SPEC section 14, decided explicitly)
+                             (decided explicitly)
       zone in the list    -> ok, host notified
       zone not in list    -> wrong_zone, security notified
 
     TWO CHECKS THE GATE MAKES AND THIS DELIBERATELY DOES NOT. Revocation is not
-    checked, because SPEC section 14 says revoking prevents future ENTRY scans
+    checked, because the design says revoking prevents future ENTRY scans
     and does not eject anyone already inside. The pass window is not checked
-    either: SPEC section 10's zone block decides exactly two outcomes and
-    section 14's list adds one more, and inventing an `expired` result would
+    either: the design's zone block decides exactly two outcomes and
+    the design's list adds one more, and inventing an `expired` result would
     turn every checkpoint into an alarm for a visitor whose overstay the
-    dashboard already reports (SPEC section 11).
+    dashboard already reports.
     """
     zone = zone_repo.find_by_code(zone_code)
     if zone is None:
-        # SPEC section 8: unknown zone code is InvalidRequest. Unlike every
+        # unknown zone code is InvalidRequest. Unlike every
         # other outcome here this one raises, because with no zone resolved
         # there is nowhere to attach a ScanEvent - the scanner sent something
         # this system has never heard of.
@@ -402,7 +400,7 @@ def zone_scan(
     }
 
     # --- not inside ---------------------------------------------------------
-    # SPEC section 14, verbatim: 200, result wrong_status, the event is still
+    # verbatim: 200, result wrong_status, the event is still
     # written, and nobody is notified. A visit that never entered cannot be
     # confirmed as having arrived anywhere.
     if visit.status != "inside":
@@ -456,7 +454,7 @@ def gate_exit(
     vehicle_plate_out: str | None = None,
     person_count_out: int | None = None,
 ) -> dict:
-    """The exit scan. SPEC sections 4.3 and 10. One scan, and it never blocks.
+    """The exit scan. One scan, and it never blocks.
 
     The photos are shown again and the plate is compared against what actually
     entered, because the question at the barrier is whether the people and the
@@ -466,20 +464,19 @@ def gate_exit(
 
       out == in   -> inside -> closed, exit_at set
       out <  in   -> the visit STAYS `inside`, security is told, and the
-                     partial_exit flag in SPEC section 11 derives itself from
+                     partial_exit flag derives itself from
                      person_count_out being less than person_count_in. exit_at
                      is deliberately NOT set - people are still on campus, and
                      stamping an exit time would silence the overstay flag too.
                      End-of-day close-out resolves it.
-      out >  in   -> SPEC section 14: record count_mismatch and close normally.
+      out >  in   -> record count_mismatch and close normally.
                      Never block. The count is evidence, not a gate.
 
     Omitting person_count_out is read as a full exit, exactly as omitting
     person_count_in at the gate is read as no mismatch. A guard who did not
     count has not reported a discrepancy.
 
-    TWO CHECKS THIS DOES NOT MAKE. Revocation is not one, because SPEC section
-    14 says in as many words that a revoked pass on a visit already inside does
+    TWO CHECKS THIS DOES NOT MAKE. Revocation is not one, because the design says in as many words that a revoked pass on a visit already inside does
     not eject anyone and that exit still works. Neither is the pass window: an
     overstaying visitor is precisely the person who most needs to be able to
     leave, and refusing them would strand them inside the record forever.
@@ -536,7 +533,7 @@ def gate_exit(
 
     if short:
         # Stays inside. No exit_at: see the docstring - the overstay flag in
-        # SPEC section 11 keys off exit_at being null, and some of this group
+        # the design keys off exit_at being null, and some of this group
         # is still on campus.
         visit_repo.save(visit)
         event = _record(

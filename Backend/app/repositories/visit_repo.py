@@ -1,4 +1,4 @@
-"""Visit storage access. SPEC section 5.
+"""Visit storage access.
 
 The ONLY code that knows Visit records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file
@@ -44,7 +44,7 @@ def count() -> int:
         return len(memory.visits)
 
 
-# Statuses from which no further transition is legal. SPEC section 8.
+# Statuses from which no further transition is legal.
 TERMINAL_STATUSES = frozenset(
     {"rejected", "cancelled", "denied", "host_unavailable", "expired", "closed"}
 )
@@ -61,7 +61,7 @@ def list_by_visitor(visitor_id: str) -> list[Visit]:
 
 
 def list_by_host(host_id: str, status: str | None = None) -> list[Visit]:
-    """The faculty inbox. SPEC section 10."""
+    """The faculty inbox."""
     with memory.lock:
         return [
             v
@@ -75,7 +75,6 @@ def find_inside_for_visitor(visitor_id: str, exclude_visit_id: str | None = None
 
     Backs both already-inside rules: VisitorAlreadyInside (409) when creating a
     visit, and the `already_inside` scan result (200) when scanning one in.
-    SPEC section 8.
     """
     with memory.lock:
         for visit in memory.visits.values():

@@ -1,4 +1,4 @@
-"""Pass storage access. SPEC section 5.
+"""Pass storage access.
 
 The ONLY code that knows Pass records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file
@@ -55,7 +55,7 @@ def find_by_visit(visit_id: str) -> Pass | None:
 def list_active() -> list[Pass]:
     """Passes that are not revoked and whose visit is not terminal.
 
-    This is the set code6 must be unique across. SPEC section 9. Imported
+    This is the set code6 must be unique across. Imported
     locally to keep the repository layer free of import cycles.
     """
     from app.repositories import visit_repo
@@ -78,7 +78,7 @@ def find_active_by_code6(code6: str) -> Pass | None:
     A code matching MORE THAN ONE active pass is a bug, not a case to handle -
     uniqueness is enforced at generation, so it cannot happen. If it somehow
     does, raise rather than picking one: silently admitting the wrong visitor
-    is the worst failure this system has. SPEC section 9.
+    is the worst failure this system has.
     """
     matches = [p for p in list_active() if p.code6 == code6]
     if len(matches) > 1:

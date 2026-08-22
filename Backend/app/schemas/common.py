@@ -1,6 +1,6 @@
-"""Shared response models. SPEC section 5 keeps schemas separate from entities.
+"""Shared response models. The design keeps schemas separate from entities.
 
-Zone and Host have no dedicated schema module in the SPEC section 16.8 tree, so
+Zone and Host have no dedicated schema module in the the design tree, so
 their read models live here alongside anything else shared.
 """
 
@@ -20,7 +20,7 @@ class ZoneOut(BaseModel):
 class HostOut(BaseModel):
     """A member of staff. Backs GET /hosts.
 
-    `phone` is included deliberately, per SPEC section 10 - it lets the guard
+    `phone` is included deliberately - it lets the guard
     call the host directly instead of waiting on escalation.
     """
 

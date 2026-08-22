@@ -1,4 +1,4 @@
-"""Host storage access. SPEC section 5.
+"""Host storage access.
 
 The ONLY code that knows Host records live in a dict. Signatures are written as
 if they were hitting a database, so swapping in PostgreSQL touches this file
@@ -45,7 +45,7 @@ def count() -> int:
 
 
 def list_by_department(department: str, exclude_host_id: str | None = None) -> list[Host]:
-    """Recipients for a department escalation. SPEC section 16.3.
+    """Recipients for a department escalation.
 
     Excludes the named host. May legitimately return an empty list when a
     department has only one host - the caller must still send one notification

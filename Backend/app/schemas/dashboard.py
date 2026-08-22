@@ -1,4 +1,4 @@
-"""Dashboard response models. SPEC sections 10 and 11.
+"""Dashboard response models.
 
 These are the three screens the system is judged on, so the shapes here are
 chosen for reading rather than for parsing. Flags come back as a named object
@@ -15,7 +15,7 @@ from app.schemas.scan import PersonOut
 
 
 class VisitFlags(BaseModel):
-    """SPEC section 11's six derived flags. Every one is computed at read time.
+    """The design's six derived flags. Every one is computed at read time.
 
     All six are ALWAYS present, including the false ones. A dashboard that
     omits the flags it did not raise makes absence and negation look the same.
@@ -30,11 +30,11 @@ class VisitFlags(BaseModel):
 
 
 class InsideRow(BaseModel):
-    """One person on campus. SPEC section 10.
+    """One person on campus.
 
     Rows arrive sorted by entry_at ascending - longest inside first - and that
     is the ONLY ordering. `flag_count` is there to be read, never to sort by:
-    section 10 says flags only, no ranking.
+    the design says flags only, no ranking.
     """
 
     visit_id: str
@@ -73,15 +73,15 @@ class ExceptionRow(BaseModel):
 
 
 class ExceptionsResponse(BaseModel):
-    """Five separate, unmerged, unranked lists. SPEC section 10.
+    """Five separate, unmerged, unranked lists.
 
     A visit may appear in several. They are not merged into one feed because
     merging would mean deciding that overstaying outranks a wrong-zone scan,
     and nothing in this system knows that.
 
-    Two keys use section 10's names rather than section 11's flag names -
-    `wrong_zone` and `awaiting_host_ack` are the same conditions section 11
-    calls `wrong_zone_scan` and `host_not_acked`.
+    Two keys are spelled differently from the flags behind them:
+    `wrong_zone` and `awaiting_host_ack` here are the conditions the row flags
+    call `wrong_zone_scan` and `host_not_acked`.
     """
 
     overstaying: list[ExceptionRow] = Field(default_factory=list)
@@ -100,7 +100,7 @@ class DepartmentAverage(BaseModel):
 
 
 class HonestyResponse(BaseModel):
-    """Counts, not charts. SPEC section 10.
+    """Counts, not charts.
 
     EVERY FIELD IS ALWAYS RETURNED, zero or empty where this build has no
     possible source. `unavailable` names each empty field and says why - a zero

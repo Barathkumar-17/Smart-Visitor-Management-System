@@ -1,4 +1,4 @@
-"""Notification storage access. SPEC section 5.
+"""Notification storage access.
 
 Append-only, and read back by GET /dev/notifications so a demo can show what
 the system "sent".

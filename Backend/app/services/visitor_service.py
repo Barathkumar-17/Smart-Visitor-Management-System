@@ -1,6 +1,6 @@
-"""Registration and verification rules. SPEC section 7.
+"""Registration and verification rules.
 
-Every rule in section 7 lives here. Two of them are easy to get subtly wrong
+Every rule in the design lives here. Two of them are easy to get subtly wrong
 and are worth stating up front:
 
   - EXPIRY IS DERIVED, NOT A JOB. Nothing in this file ever writes a visitor
@@ -9,7 +9,7 @@ and are worth stating up front:
     property on the entity.
 
   - DIGILOCKER OVERRIDES A VOUCH AT ANY POINT, and the reverse never happens -
-    vouching someone already permanently verified is a no-op (SPEC section 14).
+    vouching someone already permanently verified is a no-op.
 """
 
 import logging
@@ -43,10 +43,10 @@ def register(
     email: str | None = None,
     photo_b64: str | None = None,
 ) -> Visitor:
-    """Register a visitor. Creates tier `temporary`. SPEC section 10.
+    """Register a visitor. Creates tier `temporary`.
 
     The photo goes to the storage stub and only its REF is kept on the entity -
-    nothing else in the codebase holds base64 (SPEC section 16.5). An oversized
+    nothing else in the codebase holds base64. An oversized
     or malformed photo raises InvalidRequest from storage.put() before the
     visitor is created, so a rejected registration leaves nothing behind.
     """
@@ -77,7 +77,7 @@ def send_otp(visitor_id: str) -> str:
 
 
 def verify_otp(visitor_id: str, code: str) -> Visitor:
-    """Set phone_verified when the code checks out. SPEC section 10.
+    """Set phone_verified when the code checks out.
 
     Note this verifies the PHONE, not the person - it has no effect on tier.
     Only DigiLocker or a host vouch make a visitor `verified`.
@@ -96,12 +96,11 @@ def verify_otp(visitor_id: str, code: str) -> Visitor:
 
 
 def verify_digilocker(visitor_id: str) -> Visitor:
-    """DigiLocker consent. SPEC section 7.
+    """DigiLocker consent.
 
     Sets verified permanently and OVERRIDES AN EXISTING VOUCH AT ANY POINT.
 
-    The override keeps vouched_by_host_id rather than clearing it: SPEC section
-    7 requires verified_by and vouched_by_host_id to stay queryable so
+    The override keeps vouched_by_host_id rather than clearing it: the design requires verified_by and vouched_by_host_id to stay queryable so
     administration can trace who vouched for a visitor who later causes
     problems. Erasing that on upgrade would destroy exactly the record it asks
     for. verified_until is left as it was for the same reason - it is a
@@ -132,16 +131,16 @@ def verify_digilocker(visitor_id: str) -> Visitor:
 
 
 def apply_vouch(visitor: Visitor, host_id: str, origin: str) -> Visitor:
-    """A host vouches for a visitor AT APPROVAL. SPEC section 7.
+    """A host vouches for a visitor AT APPROVAL.
 
-    NOT AN ENDPOINT OF ITS OWN, deliberately. Section 7 is explicit: vouching
+    NOT AN ENDPOINT OF ITS OWN, deliberately. The design is explicit: vouching
     happens only through a host, only at approval, so that nobody can be
     pre-cleared ahead of a visit. Phase 4's POST /visits/{id}/approve is the
     only production caller.
 
     Three rules, in order:
 
-      1. Already permanently verified (DigiLocker) -> NO-OP. SPEC section 14
+      1. Already permanently verified (DigiLocker) -> NO-OP. The design
          forbids ever downgrading is_permanent, and a vouch is the weaker
          claim; letting it write would demote a stronger verification.
 

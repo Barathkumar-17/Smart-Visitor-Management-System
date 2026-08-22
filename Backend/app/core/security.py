@@ -1,4 +1,4 @@
-"""Role resolution. SPEC sections 5 (stubs) and 16.1.
+"""Role resolution. The design (stubs) and 16.1.
 
 Real JWT later replaces the header read and nothing else - but see the warning
 on require_role before assuming that is the whole job.
@@ -11,7 +11,7 @@ from fastapi import Header
 from app.core.errors import NotPermitted
 
 # Hardcoded users returned per role, so approved_by and the transition() actor
-# string are stable across a demo. SPEC section 16.1.
+# string are stable across a demo.
 #
 # `faculty` resolves to "Faculty User" here. Where a faculty endpoint acts on a
 # specific visit, the acting host is the visit's host_id - the header
@@ -41,7 +41,7 @@ VALID_ROLES = frozenset(USERS)
 # the header with a token while leaving the admin-satisfies-everything rule in
 # place fixes nothing.
 #
-# SPEC section 16.1.
+# the design.
 # ---------------------------------------------------------------------------
 def require_role(*roles: str):
     """FastAPI dependency resolving the caller from the X-Role header.

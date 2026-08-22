@@ -8,14 +8,14 @@ from pydantic import BaseModel, ConfigDict, Field
 class VisitorOut(BaseModel):
     """A visitor as returned by the API.
 
-    id_hash IS DELIBERATELY ABSENT and must never be added. SPEC section 15
+    id_hash IS DELIBERATELY ABSENT and must never be added. The design
     forbids any endpoint returning it; id_last4 is the field that may be shown.
     Listing fields explicitly rather than dumping the dataclass is what keeps
     that true - a future field on the entity cannot leak through by accident.
 
     `tier` is a derived property on the entity, recomputed on every read, so a
     lapsed vouch shows as `temporary` here without anything having written to
-    the record. SPEC section 6.
+    the record.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -37,12 +37,12 @@ class VisitorOut(BaseModel):
 
 
 class VisitorCreate(BaseModel):
-    """Registration body. SPEC sections 10 and 16.5.
+    """Registration body.
 
     The photo arrives as base64 in `photo_b64` and leaves as a ref - never as
-    base64 (SPEC section 16.5). Over 2 MB decoded is InvalidRequest.
+    base64. Over 2 MB decoded is InvalidRequest.
 
-    Only name and phone are required. SPEC section 3 describes a full
+    Only name and phone are required. The design describes a full
     registration as name, address, mobile, email and a live photo, but the
     remaining fields are accepted as optional here so a caller with a partial
     record is not blocked; the fields exist and are stored when supplied.
@@ -58,7 +58,7 @@ class VisitorCreate(BaseModel):
 
 
 class OtpVerifyRequest(BaseModel):
-    """OTP check. The stub accepts any six digits, per SPEC section 5."""
+    """OTP check. The stub accepts any six digits."""
 
     code: str = Field(description="Six digits.")
 
@@ -76,9 +76,7 @@ class OtpSendResponse(BaseModel):
 
 
 class PhotoOut(BaseModel):
-    """GET /photos/{ref}. The ONLY place base64 leaves this system.
-
-    SPEC section 16.5: every other response carries photo_ref, because a
+    """GET /photos/{ref}. The ONLY place base64 leaves this system.5: every other response carries photo_ref, because a
     gate-entry response leading with five inline photos would be megabytes of
     JSON on a tablet at a gate. The guard screen fetches pixels from here.
     """

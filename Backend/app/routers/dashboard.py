@@ -1,4 +1,4 @@
-"""/dashboard. SPEC sections 10 and 11.
+"""/dashboard.
 
 THESE THREE ENDPOINTS ARE READ-ONLY AND DERIVE EVERYTHING. No flag is stored,
 nothing is written, and no arithmetic lives here - the router calls
@@ -17,9 +17,9 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/inside", response_model=list[InsideRow])
 async def inside(_user=Depends(require_role("security"))):
-    """Who is on campus right now, longest inside first. SPEC section 10.
+    """Who is on campus right now, longest inside first.
 
-    Every row carries all six flags from SPEC section 11, false ones included,
+    Every row carries all six flags, false ones included,
     computed at read time. Sorted by entry_at ascending and by nothing else -
     flags are shown, never ranked.
     """
@@ -28,7 +28,7 @@ async def inside(_user=Depends(require_role("security"))):
 
 @router.get("/exceptions", response_model=ExceptionsResponse)
 async def exceptions(_user=Depends(require_role("security"))):
-    """Five separate lists, unmerged and unranked. SPEC section 10.
+    """Five separate lists, unmerged and unranked.
 
     A visit appears in every list whose condition it meets. Each row says in
     words why it is there.
@@ -38,7 +38,7 @@ async def exceptions(_user=Depends(require_role("security"))):
 
 @router.get("/honesty", response_model=HonestyResponse)
 async def honesty(_user=Depends(require_role("admin"))):
-    """The honesty panel. SPEC section 10.
+    """The honesty panel.
 
     Every field always returned, zero where this build has no source, with
     `unavailable` explaining each empty one. Never omit a field to make the

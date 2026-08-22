@@ -1,9 +1,9 @@
-"""Entity dataclasses. SPEC section 6.
+"""Entity dataclasses.
 
 These are the in-memory records, NOT the API surface. Pydantic schemas in
-app/schemas/ are that, and they are deliberately separate (SPEC section 5).
+app/schemas/ are that, and they are deliberately separate.
 
-id_hash lives here and must NEVER appear in any API response (SPEC section 15).
+id_hash lives here and must NEVER appear in any API response.
 """
 
 from dataclasses import dataclass, field
@@ -14,7 +14,7 @@ from app.core import clock
 
 @dataclass
 class Visitor:
-    """A person who may visit. SPEC section 6."""
+    """A person who may visit."""
 
     id: str
     name: str
@@ -28,7 +28,7 @@ class Visitor:
     verified_by: str | None = None
 
     # Set only by the DigiLocker stub. id_hash is never returned by any
-    # endpoint; id_last4 may be shown. SPEC sections 6 and 15.
+    # endpoint; id_last4 may be shown.
     id_hash: str | None = None
     id_last4: str | None = None
 
@@ -39,7 +39,7 @@ class Visitor:
 
     @property
     def tier(self) -> str:
-        """`verified` or `temporary` - DERIVED, never stored. SPEC section 6.
+        """`verified` or `temporary` - DERIVED, never stored.
 
         A visitor is verified while is_permanent is true, or while
         verified_until is still in the future. Nothing ever writes a visitor
@@ -58,7 +58,7 @@ class Visitor:
 
 @dataclass
 class Companion:
-    """Someone accompanying the accountable visitor. SPEC section 6.
+    """Someone accompanying the accountable visitor.
 
     Up to MAX_LINKED_COMPANIONS of these per visit. Beyond that the group
     collapses to person_count_expected with no Companion records.
@@ -72,10 +72,10 @@ class Companion:
 
 @dataclass
 class Host:
-    """A member of staff who receives visitors. SPEC section 6.
+    """A member of staff who receives visitors.
 
     `department` is a bare string - there is no department entity and none is
-    to be added. SPEC section 16.3.
+    to be added.
     """
 
     id: str
@@ -87,7 +87,7 @@ class Host:
 
 @dataclass
 class Zone:
-    """A checkpoint inside the campus. SPEC section 6."""
+    """A checkpoint inside the campus."""
 
     id: str
     code: str
@@ -96,10 +96,8 @@ class Zone:
 
 @dataclass
 class Visit:
-    """One visit by one accountable visitor, covering the whole group.
-
-    SPEC section 6. status is assigned ONLY by transition() in
-    services/visit_service.py (Phase 2) - never anywhere else, per SPEC 15.
+    """One visit by one accountable visitor, covering the whole group. status is assigned ONLY by transition() in
+    services/visit_service.py (Phase 2) - never anywhere else, per the design.
     """
 
     id: str
@@ -113,7 +111,7 @@ class Visit:
     # "pre_registered" | "walk_in"
     origin: str = "pre_registered"
 
-    # The TOTAL including the accountable visitor. SPEC section 14.
+    # The TOTAL including the accountable visitor.
     person_count_expected: int = 1
 
     vehicle_plate_in: str | None = None
@@ -124,17 +122,17 @@ class Visit:
     meeting_zone_id: str | None = None
 
     # Zone ids. Read FRESH at every scan, never baked into the QR payload -
-    # that is what lets meeting-point change without reissuing. SPEC section 9.
+    # that is what lets meeting-point change without reissuing.
     allowed_zones: list[str] = field(default_factory=list)
 
     valid_from: datetime | None = None
     valid_to: datetime | None = None
 
     # Set ONLY by fallback-decision (Phase 12, deferred) and cleared by
-    # arrival-ack. In this build it arrives only from seed data. SPEC section 10.
+    # arrival-ack. In this build it arrives only from seed data.
     restricted: bool = False
 
-    # "{role}:{id}" - same format as the transition() actor. SPEC section 16.2.
+    # "{role}:{id}" - same format as the transition() actor.
     approved_by: str | None = None
     approval_reason: str | None = None
 
@@ -152,7 +150,7 @@ class Visit:
     # Each advances null -> department -> fallback -> exhausted, never back.
     #
     # These four fields are the ONE exception to "derive flags at read time"
-    # (SPEC section 11): they record what was SENT, not what is currently true,
+    #: they record what was SENT, not what is currently true,
     # and cannot be recomputed after the fact.
     #
     # Nothing in this build advances them - the jobs that would are Phase 11,
@@ -167,7 +165,7 @@ class Visit:
 
 @dataclass
 class Pass:
-    """A signed QR plus its 6-digit fallback code. SPEC sections 6 and 9.
+    """A signed QR plus its 6-digit fallback code.
 
     The payload carries only visit_id and nonce - never visitor data, never
     the time window, never the zone list. Signing arrives at Phase 5.
@@ -188,7 +186,7 @@ class Pass:
 
 @dataclass
 class ScanEvent:
-    """The audit trail, and the most important collection here. SPEC section 6.
+    """The audit trail, and the most important collection here.
 
     One is written for EVERY scan attempt, successful or not. A later scoring
     phase reads this history and its completeness now decides whether that
@@ -197,7 +195,7 @@ class ScanEvent:
     `result` describes whether the SCAN succeeded. Mismatches sit ALONGSIDE it,
     never inside it: a gate entry whose plate differs is still `ok`, with
     plate_mismatch = True. Collapsing the two would make a mismatch
-    indistinguishable from a rejection, and SPEC section 10 forbids ever
+    indistinguishable from a rejection, and the design forbids ever
     blocking on one.
     """
 
@@ -225,7 +223,7 @@ class ScanEvent:
 
 @dataclass
 class Notification:
-    """What the notification stub "sent", so a demo can show it. SPEC section 5."""
+    """What the notification stub "sent", so a demo can show it."""
 
     id: str
     recipient: str

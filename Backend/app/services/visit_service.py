@@ -1,12 +1,12 @@
-"""Visit rules and transition(), the state machine. SPEC section 8.
+"""Visit rules and transition(), the state machine.
 
 EVERY status change in this system passes through transition(). Routers, the
 scan service, the scheduler jobs and close-out all call it, and NO CODE OUTSIDE
-THIS FUNCTION ASSIGNS visit.status - that is a hard rule in SPEC section 15.
+THIS FUNCTION ASSIGNS visit.status - that is a hard rule.
 
 The legal moves live in TRANSITIONS below as data rather than as branching, so
-the table can be read against SPEC section 8 line by line. Building it that way
-also means three of the six "specifically illegal" moves that section calls out
+the table can be read against the design line by line. Building it that way
+also means three of the six "specifically illegal" moves called out below
 need no rule of their own - they are impossible by construction. See the note
 under TRANSITIONS.
 """
@@ -38,13 +38,13 @@ from app.store.entities import Companion, Visit
 log = logging.getLogger(__name__)
 
 
-# --- The legal-move table, SPEC section 8 -----------------------------------
+# --- The legal-move table, the design -----------------------------------
 #
-# Read this against the table in SPEC section 8. Every status is a key,
+# Read this against the table. Every status is a key,
 # including the six terminal ones, which map to an empty set.
 #
 # Three of the "specifically illegal, because they are plausible guesses" moves
-# in section 8 fall out of this shape rather than needing to be listed:
+# in the design fall out of this shape rather than needing to be listed:
 #
 #   closed -> anything          the terminal rows below are empty
 #   host_unavailable -> closed  likewise - it IS the closure, not a step to one
@@ -66,7 +66,7 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     # Exit scan with a full count or end-of-day close-out; or the
     # acknowledgement chain runs out and nobody was ever reachable.
     "inside": frozenset({"closed", "host_unavailable"}),
-    # --- terminal, SPEC section 8: six of them, nothing leaves ---
+    # --- terminal, six of them, nothing leaves ---
     "rejected": frozenset(),
     "cancelled": frozenset(),
     "denied": frozenset(),
@@ -91,7 +91,7 @@ def is_terminal(status: str) -> bool:
 
 
 # The storage layer needs the same set: pass_repo.list_active() uses it to
-# decide which passes a code6 must be unique among (SPEC section 9). It cannot
+# decide which passes a code6 must be unique among. It cannot
 # import this service - repositories do not depend on services - so it holds
 # its own literal set. Checking the two agree at import makes them impossible
 # to drift apart without someone noticing immediately.
@@ -101,22 +101,21 @@ if _derived_terminal != visit_repo.TERMINAL_STATUSES:
         "Terminal statuses disagree between the state machine and the "
         f"repository layer. Table derives {sorted(_derived_terminal)}; "
         f"visit_repo.TERMINAL_STATUSES holds {sorted(visit_repo.TERMINAL_STATUSES)}. "
-        "SPEC section 8 names six terminal states - fix whichever is wrong."
+        "the design names six terminal states - fix whichever is wrong."
     )
 
 
 def transition(visit: Visit, to_status: str, actor: str) -> Visit:
-    """Move a visit to a new status, or raise. SPEC section 8.
+    """Move a visit to a new status, or raise.
 
-    `actor` is a free-text audit string, never parsed, formatted "{role}:{id}"
-    per SPEC section 16.2 - "faculty:h_2", "guard:u_guard",
-    "system:job_expiry", "dev:forced". No entity in SPEC section 6 has a field
+    `actor` is a free-text audit string, never parsed, formatted "{role}:{id}" - "faculty:h_2", "guard:u_guard",
+    "system:job_expiry", "dev:forced". No entity has a field
     to store it, so it goes to the log and nowhere else.
 
     THIS FUNCTION SETS `status` AND NOTHING ELSE. Not entry_at, not exit_at,
     not closed_reason. Those belong to whichever caller knows WHY the move is
     happening: the scan service stamps entry_at, close-out writes
-    closed_reason. Section 6 makes the same point from the other direction for
+    closed_reason. The same point is made from the other direction for
     escalation stages - "Do not close a visit as a side effect of advancing a
     stage." Keeping this function to one field is what makes it safe to call
     from six different places.
@@ -158,7 +157,7 @@ def transition(visit: Visit, to_status: str, actor: str) -> Visit:
 
 
 # =============================================================================
-# Phase 4 - pass request and approval. SPEC sections 10, 16.4, and 7 at approve.
+# Phase 4 - pass request and approval.4, and 7 at approve.
 # =============================================================================
 
 
@@ -173,7 +172,7 @@ def list_companions(visit_id: str) -> list:
 
 
 def _resolve_person_count(companions: list | None, person_count: int | None) -> int:
-    """Work out person_count_expected. SPEC section 16.4, exactly.
+    """Work out person_count_expected.4, exactly.
 
     | body                    | expected            | companion records |
     | companions[] supplied   | len(companions) + 1 | one per companion |
@@ -181,8 +180,7 @@ def _resolve_person_count(companions: list | None, person_count: int | None) -> 
     | neither                 | 1                   | none              |
     | both                    | InvalidRequest      | -                 |
 
-    The number is always the TOTAL INCLUDING the accountable visitor (section
-    14), which is what the guard's actual headcount is compared against.
+    The number is always the TOTAL INCLUDING the accountable visitor (the design), which is what the guard's actual headcount is compared against.
     """
     if companions is not None and person_count is not None:
         raise InvalidRequest(
@@ -193,7 +191,7 @@ def _resolve_person_count(companions: list | None, person_count: int | None) -> 
     if companions is not None:
         if len(companions) > MAX_LINKED_COMPANIONS:
             # Counts COMPANIONS ONLY, excluding the accountable visitor, so a
-            # group of five is legal as 1 + 4. SPEC section 6.
+            # group of five is legal as 1 + 4.
             raise CompanionLimitExceeded(
                 f"{len(companions)} companions supplied, limit is "
                 f"{MAX_LINKED_COMPANIONS} (excluding the accountable visitor)",
@@ -221,10 +219,10 @@ def create_visit(
     companions: list | None = None,
     person_count: int | None = None,
 ) -> Visit:
-    """Open a pre-registered pass request. Status `requested`. SPEC section 10.
+    """Open a pre-registered pass request. Status `requested`.
 
     Raises VisitorAlreadyInside (409) when the visitor is inside on another
-    visit. Note the deliberate split in SPEC section 8: that is a 409 here,
+    visit. Note the deliberate split: that is a 409 here,
     where a visit is being CREATED, while SCANNING an already-inside visitor
     returns 200 with result `already_inside`. Same fact, two paths.
     """
@@ -255,7 +253,7 @@ def create_visit(
     )
 
     # Companion photos go through the storage stub like any other, so nothing
-    # but the ref is held on the record. SPEC section 16.5.
+    # but the ref is held on the record.
     for entry in companions or []:
         companion_repo.save(
             Companion(
@@ -287,10 +285,9 @@ def list_visits(
     status: str | None = None,
     date: str | None = None,
 ) -> list[Visit]:
-    """The faculty inbox. SPEC section 10.
+    """The faculty inbox.
 
-    `date` filters on scheduled_at as a LOCAL_TZ calendar date (SPEC section
-    11), not a UTC one - a visit at 02:00 IST belongs to that IST day, and
+    `date` filters on scheduled_at as a LOCAL_TZ calendar date, not a UTC one - a visit at 02:00 IST belongs to that IST day, and
     comparing in UTC would file it under the previous one.
     """
     if host_id:
@@ -319,16 +316,15 @@ def approve_visit(
     valid_to,
     vouch: bool = False,
 ) -> Visit:
-    """Host approves. requested -> approved -> issued. SPEC section 10.
+    """Host approves. requested -> approved -> issued.
 
-    TWO transitions in one call, deliberately: SPEC section 8 marks
+    TWO transitions in one call, deliberately: the design marks
     approved -> issued as "automatic, same call as approve", so `approved` is a
     state the visit passes through rather than rests in.
 
-    The acting host is the visit's own host_id, not the caller - SPEC section
-    16.1: the header establishes the ROLE, the path establishes the IDENTITY.
+    The acting host is the visit's own host_id, not the caller - the design: the header establishes the ROLE, the path establishes the IDENTITY.
 
-    The pass is issued as part of reaching `issued` - SPEC section 10 ends
+    The pass is issued as part of reaching `issued` - the design ends
     approve with "pass generated". Phase 5 added that; through Phase 4 the
     visit reached `issued` with nothing behind it.
     """
@@ -364,14 +360,14 @@ def approve_visit(
     visit_repo.save(visit)
 
     if vouch:
-        # SPEC section 7: vouching happens ONLY here, at approval, through a
+        # vouching happens ONLY here, at approval, through a
         # host. The origin decides whether standing is granted at all.
         visitor = visitor_repo.get_or_404(visit.visitor_id)
         visitor_service.apply_vouch(visitor, visit.host_id, visit.origin)
 
     transition(visit, "issued", actor)
 
-    # SPEC section 10: the pass is generated in the same call as approve.
+    # the pass is generated in the same call as approve.
     issued = pass_service.issue_pass(visit.id)
 
     visitor = visitor_repo.get_or_404(visit.visitor_id)
@@ -386,7 +382,7 @@ def approve_visit(
 
 def reject_visit(visit_id: str, reason: str) -> Visit:
     """Host rejects. Only legal while `requested` - the state machine enforces
-    that, returning 409 from any other status. SPEC sections 8 and 10."""
+    that, returning 409 from any other status."""
     visit = visit_repo.get_or_404(visit_id)
     actor = f"faculty:{visit.host_id}"
 
@@ -401,13 +397,13 @@ def reject_visit(visit_id: str, reason: str) -> Visit:
 
 
 def cancel_visit(visit_id: str, reason: str) -> Visit:
-    """Host calls off a visit already approved and issued. SPEC section 10.
+    """Host calls off a visit already approved and issued.
 
     Legal only while `issued`, never once `inside` - again enforced by the
     state machine rather than by a status check here.
 
     DISTINCT FROM A SECURITY REVOKE, which sets revoked_at on the pass and
-    leaves the visit status alone (SPEC section 8).
+    leaves the visit status alone.
     """
     visit = visit_repo.get_or_404(visit_id)
     actor = f"faculty:{visit.host_id}"
@@ -427,7 +423,7 @@ def arrival_ack(
     allowed_zones: list[str] | None = None,
     valid_to=None,
 ) -> Visit:
-    """The host confirms they are available. SPEC sections 4.4 and 10.
+    """The host confirms they are available.
 
     Sets host_acked_at, and for a restricted visit ALSO lifts the restriction.
 
@@ -439,13 +435,13 @@ def arrival_ack(
     supplies the zones and the window now. Omitting either is InvalidRequest.
 
     THE QR IS NOT REISSUED, and cannot be. Neither the zone list nor valid_to
-    is in the signed payload (SPEC section 9), so both are read fresh from this
+    is in the signed payload, so both are read fresh from this
     record at the next scan. The visitor's QR is byte-identical before and
     after this call - the pass is a pointer, not a copy.
 
     NOTHING ESCALATES IF THIS IS NEVER CALLED. The chasing job is Phase 11 and
     deferred, so ack_escalation_stage stays null for the life of this build.
-    That is a documented gap, not an oversight - see CLAUDE.md.
+    That is a known gap, not an oversight.
     """
     visit = visit_repo.get_or_404(visit_id)
 
@@ -531,13 +527,12 @@ def change_meeting_point(
     meeting_zone_id: str,
     allowed_zones: list[str] | None = None,
 ) -> Visit:
-    """The host moves the meeting. SPEC section 10.
+    """The host moves the meeting.
 
-    THIS ENDPOINT EXISTS TO PROVE THE POINTER-NOT-PAYLOAD DESIGN, and SPEC
-    section 10 says so in as many words. It changes where a visitor may go on a
+    THIS ENDPOINT EXISTS TO PROVE THE POINTER-NOT-PAYLOAD DESIGN, and the design says so in as many words. It changes where a visitor may go on a
     pass they are already carrying, and it MUST NOT reissue the QR. It does not
     reissue it for a simple reason: it never touches the pass at all. Zones are
-    not in the signed payload (SPEC section 9), so the next scan reads this
+    not in the signed payload, so the next scan reads this
     record fresh and the visitor's QR is byte-identical either side of the call.
 
     WHAT HAPPENS TO THE OLD MEETING POINT. When allowed_zones is omitted, the
@@ -602,9 +597,9 @@ def change_meeting_point(
     return visit
 
 
-# SPEC section 10's close-out vocabulary, verbatim. Free text here would make
+# the design's close-out vocabulary, verbatim. Free text here would make
 # the honesty panel's "closed without an exit scan" count unreadable.
-CLOSE_REASONS: tuple[str, ...] = (
+CLOSE_REASONS: tuple[str,...] = (
     "left_without_scanning",
     "still_inside",
     "partial_exit",
@@ -613,11 +608,11 @@ CLOSE_REASONS: tuple[str, ...] = (
 
 
 def close_visit(visit_id: str, reason: str) -> Visit:
-    """End-of-day close-out by the guard. SPEC sections 4.3 and 10.
+    """End-of-day close-out by the guard.
 
     This is the sweep that resolves whatever the exit scan could not: a group
     that half left, someone who walked out past an unattended barrier, a visit
-    still open at midnight. SPEC section 4 decision 3 makes it the guard's job,
+    still open at midnight. The design decision 3 makes it the guard's job,
     not the host's.
 
     LEGAL ONLY FROM `inside`, and the state machine is what enforces that -
@@ -625,8 +620,7 @@ def close_visit(visit_id: str, reason: str) -> Visit:
 
     exit_at IS DELIBERATELY LEFT NULL. Nobody scanned out; that is the whole
     reason this endpoint was called. A closed visit with no exit_at is exactly
-    what the honesty panel counts as "closed without an exit scan" (SPEC
-    section 10), and stamping a time here would make that count unreachable and
+    what the honesty panel counts as "closed without an exit scan", and stamping a time here would make that count unreachable and
     the record a small lie.
     """
     if reason not in CLOSE_REASONS:

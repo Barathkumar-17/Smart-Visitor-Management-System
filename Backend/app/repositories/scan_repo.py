@@ -1,8 +1,8 @@
-"""ScanEvent storage access. SPEC section 5.
+"""ScanEvent storage access.
 
 Append-only. Scan events are the audit trail - nothing updates or deletes one.
 Seeded events go through this same repository so their shape matches what real
-scans produce. SPEC section 13.
+scans produce.
 """
 
 from app.store import memory
