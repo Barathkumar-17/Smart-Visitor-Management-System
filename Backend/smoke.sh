@@ -112,5 +112,71 @@ pass
 step "2.5  reset, so later phases do not inherit a closed v_1"
 curl -sS -X POST "$BASE/dev/reset" | jq -e '.reset == true' > /dev/null
 pass
+# --- Phase 3: registration and verification ---------------------------------
+# A tiny valid PNG, so the photo path is exercised with real image bytes rather
+# than an arbitrary string that happens to be base64.
+PHOTO="iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAIUlEQVR4nGP8z0AKYCJJ9aiGUdBIDGH8//8/8bJDMcwBAI2fBAWYU0mvAAAAAElFTkSuQmCC"
+
+step "3.1  POST /visitors -> registered, tier temporary, ref out not base64"
+curl -sS -X POST "$BASE/visitors" -H 'Content-Type: application/json' \
+  -d "{\"name\":\"Priya Raman\",\"phone\":\"+91-99999-88888\",\"photo_b64\":\"$PHOTO\"}" \
+  | jq -e '.id == "vr_3"
+           and .tier == "temporary"
+           and .photo_ref != null
+           and has("photo_b64") == false
+           and has("id_hash") == false' > /dev/null
+pass
+
+step "3.2  OTP send then verify -> phone_verified, tier UNCHANGED"
+CODE=$(curl -sS -X POST "$BASE/visitors/vr_3/otp/send" | jq -r '.code')
+curl -sS -X POST "$BASE/visitors/vr_3/otp/verify" -H 'Content-Type: application/json' \
+  -d "{\"code\":\"$CODE\"}" \
+  | jq -e '.phone_verified == true and .tier == "temporary"' > /dev/null
+pass
+
+step "3.3  GET /photos/{ref} -> the one place base64 comes back out"
+REF=$(curl -sS "$BASE/visitors/vr_3" | jq -r '.photo_ref')
+curl -sS "$BASE/photos/$REF" \
+  | jq -e --arg r "$REF" '.ref == $r and (.photo_b64 | length) > 0' > /dev/null
+pass
+
+step "3.4  vouch -> verified with an expiry (SPEC section 7)"
+curl -sS -X POST "$BASE/dev/vouch" -H 'Content-Type: application/json' \
+  -d '{"visitor_id":"vr_3","host_id":"h_1"}' \
+  | jq -e '.after.tier == "verified"
+           and .after.verified_by == "vouch"
+           and .after.verified_until != null
+           and .after.is_permanent == false' > /dev/null
+pass
+
+step "3.5  DigiLocker OVERRIDES the vouch, keeping the audit trail"
+curl -sS -X POST "$BASE/visitors/vr_3/digilocker" \
+  | jq -e '.verified_by == "digilocker"
+           and .is_permanent == true
+           and .id_last4 != null
+           and .vouched_by_host_id == "h_1"
+           and has("id_hash") == false' > /dev/null
+pass
+
+step "3.6  re-vouch on a permanent visitor is a no-op (SPEC section 14)"
+curl -sS -X POST "$BASE/dev/vouch" -H 'Content-Type: application/json' \
+  -d '{"visitor_id":"vr_3","host_id":"h_3"}' \
+  | jq -e '.after.verified_by == "digilocker"
+           and .after.is_permanent == true
+           and .after.vouched_by_host_id == "h_1"' > /dev/null
+pass
+
+step "3.7  GET /visitors/lookup finds by phone (declared above /{id})"
+curl -sS "$BASE/visitors/lookup?phone=%2B91-99999-88888" \
+  | jq -e '.id == "vr_3"' > /dev/null
+pass
+
+step "3.8  seeded visitors carry resolvable photos"
+for v in vr_1 vr_2; do
+  r=$(curl -sS "$BASE/visitors/$v" | jq -r '.photo_ref')
+  curl -sS "$BASE/photos/$r" | jq -e '(.photo_b64 | length) > 0' > /dev/null
+done
+pass
+
 
 printf '\nAll steps passed.\n'

@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 2 — State machine
-PHASES_COMPLETE: 0,1
+NEXT_PHASE: 3 — Registration
+PHASES_COMPLETE: 0,1,2
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 1 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 2 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -228,3 +228,7 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[1]` Seeded visitors carry `photo_ref = null` — setting one needs the Phase 3 storage stub, and a literal ref would be a dangling pointer that `GET /photos/{ref}` would 404 on. **SPEC §13's staging table names Phases 1, 5 and 6 only; the seed also needs extending at Phase 3.**
 - `[1]` Seeded visitor A's `id_hash`/`id_last4` are set directly, though the DigiLocker stub is Phase 3 — CLAUDE.md requires A at Phase 1 and §13 defines her as DigiLocker-verified. Inert data, unlike a photo ref, which would be a broken link.
 - `[1]` Seeded ids are deterministic across `/dev/reset` — counters reset before reseeding, so z_1..z_5, h_1..h_3, vr_1, vr_2, v_1, v_2 are stable. Test scripts depend on it.
+- `[2]` An unknown target status returns 409 `IllegalTransition`, not 400 — SPEC §8 was silent. One rule: anything the legal table rejects is a 409, typo or not. `/dev/transition` types `to_status` as a plain `str` so FastAPI's 422 cannot mask that path.
+- `[2]` `transition()`'s `actor` is logged, never stored — no entity in §6 has a field for it, so the server log is the audit trail. `main.py` gained `logging.basicConfig(INFO)` because uvicorn leaves root at WARNING and was silently dropping every successful transition, keeping only failures.
+- `[2]` SPEC §13 updated — seed is now written at phase 1 and extended at phases **3**, 5 and 6. Photos need the Phase 3 storage stub; a ref written earlier would be a dangling pointer.
+- `[2]` `visit_service` derives terminal statuses from the transition table and raises at import if they disagree with `visit_repo.TERMINAL_STATUSES`, which `pass_repo` needs for the code6 rule. Repos cannot import services, so the two sets stay separate but cannot drift.

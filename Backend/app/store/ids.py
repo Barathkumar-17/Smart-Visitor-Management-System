@@ -20,6 +20,9 @@ PREFIXES: dict[str, str] = {
     "pass": "p",
     "scan_event": "s",
     "notification": "n",
+    # Photo refs are "photo_{n}" per SPEC section 16.5, not an entity id, but
+    # the counter belongs here so /dev/reset makes refs deterministic too.
+    "photo": "photo",
 }
 
 

@@ -50,6 +50,10 @@ VOUCH_VALIDITY_DAYS = 100
 # Counts companions ONLY, excluding the accountable visitor. SPEC section 6.
 MAX_LINKED_COMPANIONS = 4
 
+# Decoded photo size cap. SPEC section 16.5 fixes it at 2 MB: the store is a
+# dict in RAM, and an uncapped field turns a demo into an OOM.
+MAX_PHOTO_BYTES = 2 * 1024 * 1024
+
 # Local-time hours during which the fallback authority is the admin block;
 # outside them it is security. Evaluated in LOCAL_TZ. SPEC sections 4 and 16.3.
 WORKING_HOURS_START = 9

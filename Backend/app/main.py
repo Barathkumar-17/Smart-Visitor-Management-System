@@ -51,6 +51,7 @@ app.add_exception_handler(DomainError, domain_error_handler)
 
 app.include_router(reference.router)
 app.include_router(visitors.router)
+app.include_router(visitors.photos_router)
 app.include_router(dev.router)
 
 

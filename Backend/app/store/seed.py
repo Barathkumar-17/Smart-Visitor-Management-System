@@ -5,11 +5,12 @@ and again on every /dev/reset.
 
 THIS FILE IS DELIBERATELY UNFINISHED. Some seeded records need capability that
 arrives later - a signed pass needs Phase 5's signing, a scan event needs Phase
-6's scan service. So it is written at Phase 1 and extended at Phases 5 and 6.
+6's scan service. So it is written at Phase 1 and extended at Phases 3, 5 and 6.
 Records this build cannot yet produce are NOT faked here.
 
 Seeded at Phase 1:  zones, hosts, visitor A (+ requested visit),
                     visitor C (+ fallback-admitted visit, already inside)
+Added at Phase 3:   photo refs for every seeded visitor, via storage.put()
 Added at Phase 5:   visitor B and her issued pass - needs signing
 Added at Phase 6:   visitors D, E, F, and the scan events for C, D, E and F
                     - needs the scan service
@@ -18,13 +19,54 @@ Everything is created through a REPOSITORY, never by writing to a store dict,
 so seeded records have exactly the shape live ones do.
 """
 
+import base64
+import struct
+import zlib
 from datetime import timedelta
 
 from app.core import clock
 from app.core.config import RESTRICTED_VISIT_DURATION
+from app.integrations import storage
 from app.repositories import host_repo, visit_repo, visitor_repo, zone_repo
 from app.store import ids, memory
 from app.store.entities import Host, Visit, Visitor, Zone
+
+
+def _placeholder_photo(rgb: tuple[int, int, int]) -> str:
+    """Build a small solid-colour PNG and return it base64-encoded.
+
+    There are no real photographs in a seeded prototype, and a stand-in that is
+    obviously a stand-in beats a stock face that might be mistaken for one.
+    Each seeded visitor gets a different colour so the gate-entry response at
+    Phase 6 visibly shows DIFFERENT images rather than one repeated blob.
+
+    Generated rather than pasted as a base64 literal so it stays readable: an
+    opaque 120-character string in a seed file tells the next reader nothing.
+    """
+    width = height = 24
+
+    # Byte literals are built with bytes([...]) rather than escape sequences
+    # so nothing here depends on backslash handling surviving an edit.
+    png_magic = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+    filter_byte = bytes([0])
+
+    rows = b"".join(filter_byte + bytes(rgb) * width for _ in range(height))
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        body = tag + data
+        return (
+            struct.pack(">I", len(data))
+            + body
+            + struct.pack(">I", zlib.crc32(body))
+        )
+
+    png = (
+        png_magic
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+    return base64.b64encode(png).decode()
 
 # --- Zones ------------------------------------------------------------------
 # The five from SPEC section 13.
@@ -93,12 +135,13 @@ def _seed_hosts() -> list[Host]:
 def _seed_visitor_a(hosts: list[Host]) -> None:
     """Visitor A - DigiLocker-verified, with a visit still `requested`.
 
-    id_hash and id_last4 are normally set by the DigiLocker stub, which arrives
-    at Phase 3. They are set directly here because CLAUDE.md requires A at
-    Phase 1 and SPEC section 13 defines her as DigiLocker-verified; the values
-    are inert data of exactly the shape that stub will produce.
+    id_hash and id_last4 are set directly rather than through the DigiLocker
+    stub. CLAUDE.md requires A at Phase 1, two phases before that stub existed,
+    and SPEC section 13 defines her as DigiLocker-verified; the values are
+    inert data of exactly the shape the stub produces.
 
-    photo_ref is deliberately left null - see the note at the end of this file.
+    Her photo DOES go through storage.put(), added at Phase 3 - unlike an id
+    hash, a hand-written photo ref would be a link to nothing.
     """
     visitor = visitor_repo.save(
         Visitor(
@@ -115,6 +158,7 @@ def _seed_visitor_a(hosts: list[Host]) -> None:
             ),
             id_last4="4321",
             is_permanent=True,
+            photo_ref=storage.put(_placeholder_photo((74, 124, 189))),
         )
     )
 
@@ -171,6 +215,7 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
             phone_verified=True,
             verified_by=None,
             is_permanent=False,
+            photo_ref=storage.put(_placeholder_photo((196, 122, 74))),
         )
     )
 
@@ -217,16 +262,16 @@ def reset() -> None:
     that advanced time does not leave the next one running in the future.
     """
     memory.clear_all()
+    storage.clear()
     ids.reset()
     clock.reset_offset()
     load()
 
 
-# --- Known gap at Phase 1, deliberately not filled --------------------------
+# --- Closed at Phase 3 ------------------------------------------------------
 #
-# photo_ref is null on both seeded visitors. Setting one needs
-# integrations/storage.py, which is Phase 3. A literal ref written here would
-# be a DANGLING POINTER: GET /photos/{ref} would 404 on it at Phase 3, and
-# Phase 6's gate-entry response - which SPEC section 10 requires to lead with
-# faces - would carry refs resolving to nothing. Extending the seed with real
-# photos belongs at Phase 3, alongside the stub that can produce them.
+# photo_ref was null on both seeded visitors through Phases 1 and 2, because
+# setting one needs integrations/storage.py. Phase 3 built that stub, so both
+# now go through storage.put() like any live registration and GET /photos/{ref}
+# resolves them. SPEC section 13 records Phase 3 as a seed-extension phase for
+# exactly this reason.
