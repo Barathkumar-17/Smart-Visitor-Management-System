@@ -12,8 +12,7 @@ Seeded at Phase 1:  zones, hosts, visitor A (+ requested visit),
                     visitor C (+ fallback-admitted visit, already inside)
 Added at Phase 3:   photo refs for every seeded visitor, via storage.put()
 Added at Phase 5:   visitor B, her two companions and her signed pass
-Added at Phase 6:   visitors D, E, F, and the scan events for C, D, E and F
-                    - needs the scan service
+Added at Phase 6:   visitors D, E and F, and the entry scans for C, D, E and F
 
 Everything is created through a REPOSITORY, never by writing to a store dict,
 so seeded records have exactly the shape live ones do.
@@ -22,19 +21,21 @@ so seeded records have exactly the shape live ones do.
 import base64
 import struct
 import zlib
+from contextlib import contextmanager
 from datetime import timedelta
 
 from app.core import clock
 from app.core.config import RESTRICTED_VISIT_DURATION
-from app.integrations import storage
+from app.integrations import notifications, storage
 from app.repositories import (
     companion_repo,
+    pass_repo,
     host_repo,
     visit_repo,
     visitor_repo,
     zone_repo,
 )
-from app.services import pass_service, visitor_service
+from app.services import pass_service, scan_service, visitor_service
 from app.services.visit_service import transition
 from app.store import ids, memory
 from app.store.entities import Companion, Host, Visit, Visitor, Zone
@@ -207,8 +208,9 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     it, but short of NO_SCAN_WINDOW (30 min), so she does not also trip
     no_destination_scan and blur which fixture demonstrates what.
 
-    Her pass and her entry ScanEvent are NOT created here - those need Phase
-    5's signing and Phase 6's scan service. Phase 6 extends her.
+    Phase 6 completes her: she gets a real pass and is scanned in through the
+    live gate-entry service, so her entry ScanEvent is indistinguishable from
+    one a guard produced.
     """
     entry_at = clock.now() - timedelta(minutes=25)
     meeting_zone = zones_by_code["MAIN"]
@@ -227,17 +229,16 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
         )
     )
 
-    visit_repo.save(
+    visit = visit_repo.save(
         Visit(
             id=ids.next_id("visit"),
             visitor_id=visitor.id,
             host_id=hosts[1].id,
             purpose="Vendor demonstration - unscheduled",
             scheduled_at=entry_at,
-            status="inside",
+            status="issued",
             origin="pre_registered",
             person_count_expected=1,
-            person_count_in=1,
             vehicle_plate_in="TN-09-BC-4455",
             meeting_zone_id=meeting_zone.id,
             allowed_zones=[meeting_zone.id],
@@ -249,10 +250,15 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
                 "Host unreachable after escalation; admitted to the meeting "
                 "point only, on a short window, pending host acknowledgement."
             ),
-            entry_at=entry_at,
             host_acked_at=None,
         )
     )
+
+    # A fallback admission still issues a pass, and she was still scanned in at
+    # the gate - so both go through the real services rather than being
+    # asserted by setting entry_at directly.
+    pass_service.issue_pass(visit.id)
+    _admit(visit, entry_at, plate="TN-09-BC-4455", count=1)
 
 
 def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
@@ -333,6 +339,202 @@ def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     pass_service.issue_pass(visit.id)
 
 
+@contextmanager
+def _clock_rewound_to(moment):
+    """Run a block as though the clock read `moment`, then restore it.
+
+    D, E and F are all seeded as visitors who entered some time ago, and their
+    entry_at and their ScanEvent created_at both have to reflect that. Setting
+    those fields by hand afterwards would mean the seeded records did not come
+    from the code path live ones use, which SPEC section 13 forbids.
+
+    Rewinding the clock instead lets the REAL gate_entry run and stamp
+    everything itself. The offset is restored on the way out, including if the
+    block raises, so a partially built seed cannot leave time shifted.
+    """
+    original = clock.offset()
+    delta_minutes = (moment - clock.now()).total_seconds() / 60
+    clock.advance(delta_minutes)
+    try:
+        yield
+    finally:
+        clock.reset_offset()
+        if original:
+            clock.advance(original.total_seconds() / 60)
+
+
+def _admit(visit, entry_at, plate=None, count=None):
+    """Scan a seeded visitor in through the real gate-entry service.
+
+    Uses the pass exactly as a guard's scanner would - signed payload and all -
+    so the resulting ScanEvent is indistinguishable from a live one.
+    """
+    issued = pass_repo.find_by_visit(visit.id)
+    payload = {"visit_id": issued.visit_id, "nonce": issued.nonce}
+
+    with _clock_rewound_to(entry_at):
+        result = scan_service.gate_entry(
+            payload=payload,
+            signature=issued.signature,
+            vehicle_plate=plate,
+            person_count_in=count,
+        )
+
+    if not result["admitted"]:
+        raise RuntimeError(
+            f"Seed failed to admit {visit.id}: {result['result']} - {result['message']}"
+        )
+    return result
+
+
+def _seed_inside_visitor(
+    name: str,
+    phone: str,
+    address: str,
+    rgb: tuple[int, int, int],
+    host: Host,
+    purpose: str,
+    meeting_zone: Zone,
+    allowed: list[Zone],
+    entry_minutes_ago: int,
+    window_hours: float,
+    plate: str,
+) -> Visit:
+    """Build one visitor who is already inside, through the real services.
+
+    Shared by D, E and F, which differ only in their timings and their scan
+    history. Each goes registered -> requested -> approved -> issued -> inside,
+    every step through the code the live path uses.
+    """
+    entry_at = clock.now() - timedelta(minutes=entry_minutes_ago)
+
+    visitor = visitor_repo.save(
+        Visitor(
+            id=ids.next_id("visitor"),
+            name=name,
+            phone=phone,
+            address=address,
+            phone_verified=True,
+            photo_ref=storage.put(_placeholder_photo(rgb)),
+        )
+    )
+
+    visit = visit_repo.save(
+        Visit(
+            id=ids.next_id("visit"),
+            visitor_id=visitor.id,
+            host_id=host.id,
+            purpose=purpose,
+            scheduled_at=entry_at,
+            status="requested",
+            origin="pre_registered",
+            person_count_expected=1,
+            vehicle_plate_in=plate,
+        )
+    )
+
+    actor = f"faculty:{host.id}"
+    transition(visit, "approved", actor)
+
+    visit.meeting_zone_id = meeting_zone.id
+    visit.allowed_zones = [meeting_zone.id] + [z.id for z in allowed]
+    visit.valid_from = entry_at
+    visit.valid_to = entry_at + timedelta(hours=window_hours)
+    visit.approved_by = actor
+    visit_repo.save(visit)
+
+    transition(visit, "issued", actor)
+    pass_service.issue_pass(visit.id)
+
+    _admit(visit, entry_at, plate=plate, count=1)
+    return visit_repo.get(visit.id)
+
+
+def _seed_visitors_d_e_f(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
+    """D, E and F - the three exception fixtures. SPEC section 13.
+
+    Each exists to make ONE dashboard flag reachable at Phase 13. Nothing in
+    this build raises an exception flag live, because the jobs that would are
+    Phase 11 and deferred, so without these three every exceptions list renders
+    empty on first load and the demo dies.
+
+      D  host_not_acked      entered 40 min ago, past ACK_WINDOW (12 min),
+                             host_acked_at still null
+      E  wrong_zone_scan     entered, then scanned at LIB, which is not on her
+                             allowed list
+      F  overstaying         entered on a short window that has since lapsed,
+                             scanned correctly at her meeting zone, never left
+
+    Their timings are chosen so each demonstrates its OWN flag as cleanly as
+    possible. D is inside NO_SCAN_WINDOW... deliberately not: at 40 minutes she
+    is past it, so she shows no_destination_scan too. That is honest rather
+    than tidy - a visitor nobody acknowledged and who never reached a
+    checkpoint really is both.
+    """
+    dept = zones_by_code["DEPT"]
+    main = zones_by_code["MAIN"]
+    lib = zones_by_code["LIB"]
+
+    # --- D: nobody acknowledged her ----------------------------------------
+    _seed_inside_visitor(
+        name="Fatima Sheikh",
+        phone="+91-98400-55555",
+        address="12 Mount Road, Chennai 600002",
+        rgb=(150, 120, 90),
+        host=hosts[2],
+        purpose="Curriculum review meeting",
+        meeting_zone=dept,
+        allowed=[main],
+        entry_minutes_ago=40,
+        window_hours=4,
+        plate="TN-11-CD-3131",
+    )
+
+    # --- E: scanned somewhere she was not allowed --------------------------
+    visit_e = _seed_inside_visitor(
+        name="George Mathew",
+        phone="+91-98400-66666",
+        address="45 Sterling Road, Chennai 600034",
+        rgb=(100, 140, 170),
+        host=hosts[0],
+        purpose="Research collaboration discussion",
+        meeting_zone=dept,
+        allowed=[main],
+        entry_minutes_ago=20,
+        window_hours=4,
+        plate="TN-22-EF-4242",
+    )
+    # LIB is not on his allowed list, so this is exactly what a wrong-zone scan
+    # produces. Written through the same _record() the live path uses; the
+    # endpoint that decides `wrong_zone` arrives at Phase 9.
+    with _clock_rewound_to(clock.now() - timedelta(minutes=8)):
+        scan_service._record(visit_e.id, "zone", "wrong_zone", zone_id=lib.id)
+    notifications.notify_security(
+        f"Wrong-zone scan on visit {visit_e.id} at {lib.code}."
+    )
+
+    # --- F: still inside, window long gone ---------------------------------
+    visit_f = _seed_inside_visitor(
+        name="Nandini Krishnan",
+        phone="+91-98400-77777",
+        address="3 Cathedral Road, Chennai 600086",
+        rgb=(170, 140, 190),
+        host=hosts[1],
+        purpose="Guest lecture",
+        meeting_zone=main,
+        allowed=[dept],
+        entry_minutes_ago=150,
+        # A two-hour window entered 150 minutes ago lapsed half an hour back,
+        # so `overstaying` derives true without any stored flag.
+        window_hours=2,
+        plate="TN-33-GH-5353",
+    )
+    # She DID reach her meeting point, so no_destination_scan stays false and
+    # she demonstrates overstay alone.
+    with _clock_rewound_to(clock.now() - timedelta(minutes=140)):
+        scan_service._record(visit_f.id, "zone", "ok", zone_id=main.id)
+
+
 def load() -> None:
     """Populate an empty store. Called at startup and by /dev/reset."""
     zones_by_code = _seed_zones()
@@ -340,6 +542,7 @@ def load() -> None:
     _seed_visitor_a(hosts)
     _seed_visitor_c(hosts, zones_by_code)
     _seed_visitor_b(hosts, zones_by_code)
+    _seed_visitors_d_e_f(hosts, zones_by_code)
 
 
 def reset() -> None:

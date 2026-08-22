@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 5 — Signing
-PHASES_COMPLETE: 0,1,2,3,4
+NEXT_PHASE: 6 — Gate entry
+PHASES_COMPLETE: 0,1,2,3,4,5
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 4 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 5 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -249,3 +249,8 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[4]` Naive datetimes are rejected with 422 by a Pydantic validator on `scheduled_at`, `valid_from` and `valid_to` — §16.7 requires an offset, and a naive value would silently shift a window by 5.5 hours in this deployment.
 - `[5]` `POST /dev/vouch` deleted — Phase 4's `approve` is the real vouch path, so the temporary route added at Phase 3 is redundant and §7 bans a standalone vouch endpoint. Nothing outward-facing changed; it was never in the schema.
 - `[5]` `HMAC_SECRET` keeps its built-in development default so the app runs with no `.env`, but startup logs a warning whenever that default is in use, and `.env.example` now carries an obvious placeholder rather than a working value. Confirmed in chat.
+- `[5]` `resolve_scan()` treats a valid signature over a stale nonce as `bad_signature` — SPEC is silent, and admitting on a superseded QR after a reissue would be worse than refusing.
+- `[5]` `issue_pass` is idempotent: a visit that already has a pass gets the same one back, never a reissue, so nothing can silently invalidate a QR a visitor already carries.
+- `[5]` Visitor B's seed runs through the real `apply_vouch`, `transition` and `issue_pass` rather than being written by hand — §13 requires that of scan events, and the same reasoning applies to her pass.
+- `[5]` `smoke.sh` rewritten rather than appended: seeding B claims `vr_3`/`v_3` so every later id shifted, and the Phase 3 vouch step used the now-deleted `/dev/vouch`. The vouch and DigiLocker-override assertions moved into the Phase 4 block, where `approve` provides them properly.
+- `[5]` README gained Running, What is built, Security and Documents sections; the two production blockers (open auth, default HMAC secret) are written up there in full.
