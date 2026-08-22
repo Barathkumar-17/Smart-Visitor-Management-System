@@ -21,6 +21,7 @@ from app.repositories import (
     visitor_repo,
     zone_repo,
 )
+from app.services import visit_service
 from app.store import seed
 
 router = APIRouter(prefix="/dev", tags=["dev"], include_in_schema=False)
@@ -29,6 +30,19 @@ router = APIRouter(prefix="/dev", tags=["dev"], include_in_schema=False)
 class AdvanceClockRequest(BaseModel):
     minutes: int = Field(
         description="Minutes to shift the clock forward. Additive and cumulative."
+    )
+
+
+class TransitionRequest(BaseModel):
+    visit_id: str
+    # Deliberately a plain str, NOT a Literal of the known statuses. A Literal
+    # would make FastAPI reject an unknown status with its own 422 before the
+    # service ever saw it, and the 409 that SPEC section 8 wants for a move the
+    # table rejects would become untestable.
+    to_status: str = Field(
+        description="Target status. Anything the SPEC section 8 table does not "
+        "allow from the current status returns 409, including a status that "
+        "does not exist."
     )
 
 
@@ -74,6 +88,31 @@ async def advance_clock(body: AdvanceClockRequest) -> dict[str, Any]:
         "now_local": clock.readable(),
         "clock_offset_minutes": offset.total_seconds() / 60,
         "now": clock.now().isoformat(),
+    }
+
+
+@router.post("/transition")
+async def force_transition(body: TransitionRequest) -> dict[str, Any]:
+    """Drive the state machine directly. SPEC section 10.
+
+    Exists so the machine is testable at Phase 2, before any real endpoint
+    drives it - the first of those is POST /visits/{id}/approve at Phase 4 -
+    and to force a visit into a given state during manual testing later.
+
+    The actor is "dev:forced" per SPEC section 16.2, so the log makes clear a
+    move was forced rather than reached through the flow.
+    """
+    visit = visit_repo.get_or_404(body.visit_id)
+    from_status = visit.status
+
+    visit_service.transition(visit, body.to_status, actor="dev:forced")
+
+    return {
+        "visit_id": visit.id,
+        "from": from_status,
+        "to": visit.status,
+        "is_terminal": visit_service.is_terminal(visit.status),
+        "legal_moves_now": visit_service.legal_moves(visit.status),
     }
 
 

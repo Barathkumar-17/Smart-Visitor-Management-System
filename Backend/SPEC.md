@@ -475,7 +475,9 @@ If any value produces behaviour that seems wrong for the flow, flag it — do no
 
 - 3 hosts across 2 departments, 5 zones (main block, library, admin block, hostel gate, department office)
 
-**`store/seed.py` is not finished in one go.** Some seeded records need capability that arrives in a later phase — a signed pass needs the signing code, a scan event needs the scan service. So the seed file is written at phase 1 and extended at phases 5 and 6. Do not try to create records the code cannot yet produce, and do not fake them by writing dicts directly.
+**`store/seed.py` is not finished in one go.** Some seeded records need capability that arrives in a later phase — a signed pass needs the signing code, a scan event needs the scan service, a photo ref needs the storage stub. So the seed file is written at phase 1 and extended at phases 3, 5 and 6. Do not try to create records the code cannot yet produce, and do not fake them by writing dicts directly.
+
+**Phase 3 extends the seed with photos.** Every seeded visitor is created at phase 1 with `photo_ref = null`, because `integrations/storage.py` does not exist until phase 3. A literal ref written earlier would be a dangling pointer: `GET /photos/{ref}` would 404 on it, and phase 6's gate-entry response — which §10 requires to lead with faces — would carry refs resolving to nothing. Set them at phase 3, through `storage.put()`, never by hand.
 
 | Visitor | State | Scan events to seed | Added in |
 |---|---|---|---|

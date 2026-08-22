@@ -78,4 +78,39 @@ curl -sS "$BASE/visitors/vr_2" \
   | jq -e '.id == "vr_2" and .tier == "temporary"' > /dev/null
 pass
 
+# --- Phase 2: state machine -------------------------------------------------
+# The full legal lifecycle on v_1, one row of the SPEC section 8 table per step.
+# v_2 is deliberately untouched: that is visitor C, and Phase 8 needs her still
+# inside and unacknowledged.
+
+step "2.1  v_1 requested -> approved"
+curl -sS -X POST "$BASE/dev/transition" -H 'Content-Type: application/json' \
+  -d '{"visit_id":"v_1","to_status":"approved"}' \
+  | jq -e '.from == "requested" and .to == "approved"' > /dev/null
+pass
+
+step "2.2  v_1 approved -> issued"
+curl -sS -X POST "$BASE/dev/transition" -H 'Content-Type: application/json' \
+  -d '{"visit_id":"v_1","to_status":"issued"}' \
+  | jq -e '.to == "issued"' > /dev/null
+pass
+
+step "2.3  v_1 issued -> inside"
+curl -sS -X POST "$BASE/dev/transition" -H 'Content-Type: application/json' \
+  -d '{"visit_id":"v_1","to_status":"inside"}' \
+  | jq -e '.to == "inside" and .is_terminal == false' > /dev/null
+pass
+
+step "2.4  v_1 inside -> closed, and closed is terminal"
+curl -sS -X POST "$BASE/dev/transition" -H 'Content-Type: application/json' \
+  -d '{"visit_id":"v_1","to_status":"closed"}' \
+  | jq -e '.to == "closed"
+           and .is_terminal == true
+           and (.legal_moves_now | length) == 0' > /dev/null
+pass
+
+step "2.5  reset, so later phases do not inherit a closed v_1"
+curl -sS -X POST "$BASE/dev/reset" | jq -e '.reset == true' > /dev/null
+pass
+
 printf '\nAll steps passed.\n'

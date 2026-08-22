@@ -6,6 +6,7 @@ THIS FILE DOES NOT START THE SCHEDULER. Phase 11 is deferred, jobs/scheduler.py
 is empty, and adding the startup call is part of that phase, not this one.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -15,6 +16,15 @@ from app.core import clock
 from app.core.errors import DomainError, domain_error_handler
 from app.routers import dev, reference, visitors
 from app.store import seed
+
+# The state machine writes one audit line per status change, naming the actor
+# (SPEC section 16.2). No entity in SPEC section 6 stores that string, so the
+# log IS the audit trail - and uvicorn leaves the root logger at WARNING, which
+# would silently drop every successful transition and keep only the failures.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)-8s %(name)s: %(message)s",
+)
 
 
 @asynccontextmanager
