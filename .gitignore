@@ -1,0 +1,39 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Virtual environments -------------------------------------------------
+# The project venv lives at the repository root as .venv
+.venv/
+venv/
+env/
+ENV/
+
+# --- Secrets --------------------------------------------------------------
+# .env holds HMAC_SECRET and must never be committed.
+# .env.example is the template and IS tracked - the negation keeps it so.
+.env
+.env.*
+!.env.example
+
+# --- Packaging / tooling --------------------------------------------------
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Editors --------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+
+# --- OS -------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
