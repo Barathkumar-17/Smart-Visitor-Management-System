@@ -101,19 +101,86 @@ surface for the visitor lifecycle, not persistence.
 
 Built: registration and verification, the pass request and approval flow, the
 state machine, pass signing, gate entry, arrival acknowledgement, zone scans,
-exit and close-out, and the dashboards.
+exit and close-out, and the dashboards. Everything below the gate-entry line
+is what a visitor actually touches; the rest is the record it leaves behind.
 
-**Not built, deliberately:** the walk-in flow, the background scheduler that
-drives escalation, and the fallback-authority decision. All three are fully
-specified in `SPEC.md` and none is abandoned — they were cut because the
-demonstration is four minutes long and they buy nothing showable in it. The
-scheduler is the first thing to add back.
+---
 
-One consequence worth stating plainly: **exception flags never appear during a
-session.** The dashboards read flags that the scheduler's jobs would normally
-raise, so the seed carries visitors already in those states. The lists are
-correct and populated on first load, but nothing becomes an exception while you
-watch. Nothing in the system claims otherwise.
+## What is not built, and what it would do
+
+Three pieces of the specification are deliberately unbuilt. All three are fully
+described in `SPEC.md`, none is abandoned, and each is summarised here so the
+gap between the specification and the running code is visible rather than
+discovered.
+
+They were cut for one reason: the demonstration is about four minutes long, and
+none of the three produces anything showable in that time. What gets built was
+decided by what fits on screen, not by what completes the product.
+
+### Walk-in registration at the gate
+
+A second way in, for someone who arrives without a pass. The guard creates a
+**temporary registration** on the spot — name, phone confirmed by OTP, a live
+photo, vehicle — which holds the visit but confers no standing at all. A
+returning walk-in is found by phone and skips the form entirely, and the phone
+number is what links a temporary record to a proper registration later.
+
+Walk-ins escalate on **much shorter windows** than pre-registered visits — seven
+minutes to the department rather than thirty — because a person is physically
+standing at the gate while the system waits for an answer. A host who vouches
+for a walk-in at approval grants standing for **that visit only**, unlike a
+pre-registered vouch, which is good for a hundred days.
+
+The verification rules for this path are implemented; only the endpoint that
+creates the visit is missing.
+
+### The background scheduler
+
+Five jobs, running every couple of minutes. This is the most significant thing
+being left out, and the first to add back.
+
+| Job | What it does |
+|---|---|
+| Approval escalation | A request nobody has answered goes to the department, then to the fallback authority. |
+| Acknowledgement escalation | A visitor is inside and the host has not confirmed: department, then fallback, then the visit closes as `host_unavailable` with security notified. |
+| No destination scan | Entered the gate but reached no checkpoint within the window — security is told. This is the detection that matters most, because the signal is an **absence**. |
+| Overstay | Past the pass window with no exit scan. Notifies; never changes status. |
+| Expiry | A request nobody actioned, or a pass never scanned in, becomes `expired`. |
+
+Escalation is what turns the system from a register into something that chases
+people, and its absence is why nothing in a running session ever *becomes* an
+exception.
+
+### Fallback authority
+
+The decision made when escalation runs out of people to ask. The fallback
+approver is the **admin block during working hours and the security desk outside
+them**, evaluated at the moment the stage advances rather than when the visit was
+created.
+
+They see the photograph taken at the gate, **must supply a reason**, and can
+either deny — a terminal outcome — or admit on restricted terms: the meeting
+point only, a short window, and the visit flagged as an unacknowledged-host
+entry for as long as it stays open.
+
+This is the **only** path in the entire system that marks a visit `restricted`,
+which is why it cannot be built without the walk-in flow or the scheduler that
+reaches it.
+
+### What their absence changes
+
+Two consequences, stated plainly because both are visible when using the system:
+
+**Exception flags never appear during a session.** The dashboards read flags the
+scheduler's jobs would raise, so the seed carries visitors already in those
+states — one unacknowledged, one who scanned somewhere they should not have, one
+overstaying. Every list is correct and populated on first load, but nothing
+becomes an exception while you watch, and nothing in the system claims otherwise.
+
+**Two honesty-panel counts are permanently zero** — restricted admissions broken
+down by approver, and walk-ins denied after escalation. Both are returned as
+zero rather than hidden, because a panel that drops the fields it cannot fill
+defeats its own purpose.
 
 ---
 
