@@ -35,6 +35,6 @@ def next_id(collection: str) -> str:
 
 
 def reset() -> None:
-    """Clear every counter. Called by /dev/reset at Phase 1."""
+    """Clear every counter. Called by /dev/reset, so seeded ids are stable."""
     with _lock:
         _counters.clear()

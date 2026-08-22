@@ -3,7 +3,7 @@
 No service or router hardcodes a window; they all read it from here.
 
 The values below are the design's proposals and are UNVALIDATED. They are
-reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW first become visible
+worth reviewing: ACK_WINDOW and NO_SCAN_WINDOW decide what the dashboards flag
 on the dashboards and decide whether seeded visitors D and E appear as
 exceptions at all.
 """
@@ -75,6 +75,6 @@ WORKING_HOURS_END = 17
 
 # --- Scheduler --------------------------------------------------------------
 
-# Read by Phase 11, which is deferred. Nothing starts the scheduler in this
+# Read by the scheduler, which is not implemented. Nothing starts it in this
 # build.
 SCHEDULER_INTERVAL = timedelta(minutes=2)

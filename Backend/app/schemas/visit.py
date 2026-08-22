@@ -119,7 +119,8 @@ class VisitOut(BaseModel):
 
     Carries the whole record, including the four escalation-stage fields. Those
     stay null for the life of this build - the jobs that advance them are Phase
-    11, which is deferred - but they are returned rather than hidden so nothing
+    the scheduler, which is not implemented - but they are returned rather than
+    hidden so nothing
     downstream has to guess whether a chain ever ran.
     """
 

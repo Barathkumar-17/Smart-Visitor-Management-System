@@ -295,25 +295,57 @@ Full detail per endpoint is in [`Backend/API.md`](Backend/API.md).
 
 ---
 
-## What is not built
+## Where this goes next
 
-Three parts of the design were deliberately left out. None is abandoned. They were cut for one reason: the demonstration is four minutes long, and none of them produces anything you could show in that time.
+The design covers more than the current build implements. Three pieces are fully specified and are the natural next work — each extends what is already here rather than replacing any of it.
 
-**Walk-in registration.** A second way in, for someone who turns up without a pass. The guard would register them at the gate — name, phone confirmed by code, a photo taken on the spot — enough to hold the visit but granting no standing. Walk-ins would be chased on far shorter timers than booked visits, because a person is physically standing there waiting.
+### Walk-in registration
 
-**The background scheduler.** Five jobs running every couple of minutes: chasing a host who hasn't approved, chasing a host who hasn't confirmed an arrival, noticing someone who entered but reached no checkpoint, noticing overstays, and expiring dead requests. This is the biggest omission and the first thing to add back — it is what turns the system from a register into something that chases people.
+A second way in, for a visitor who turns up without a pass. The guard registers them at the gate — name, phone confirmed by a code, a photo taken on the spot — enough to open a visit, granting no standing on its own. A returning walk-in is found by phone and skips the form entirely.
 
-**Fallback authority.** What happens when the chasing runs out of people to ask: the admin block during working hours, the security desk outside them. They see the photograph taken at the gate, must give a reason, and can either turn the visitor away or admit them on restricted terms.
+Walk-ins would be chased on much shorter timers than booked visits, seven minutes rather than thirty, because a person is physically standing at the gate while the system waits for an answer.
 
-**What their absence changes.** Nothing *becomes* a problem while you watch. The visitors who are overstaying or unconfirmed start out that way, so every dashboard is correct and full the moment you open it — but no alarm goes off during a demonstration, and nothing in the system claims otherwise. Two counts on the honesty panel are permanently zero for the same reason, and are shown as zero rather than hidden.
+**Most of this already exists.** Registration, phone verification, vouching and the whole scan path are built; what it needs is the endpoint that opens a visit from the gate.
+
+### The background scheduler
+
+Five jobs on a two-minute cycle:
+
+| Job | What it would catch |
+|---|---|
+| Approval chasing | A request nobody has answered — escalate to the department, then higher |
+| Arrival chasing | A visitor inside whose host never confirmed |
+| No checkpoint scan | Entered the gate, reached nowhere. **The signal is the absence** |
+| Overstay | Past the pass window with no exit scan |
+| Expiry | Requests nobody actioned, passes nobody used |
+
+This is the single biggest addition available, and the one that changes what the system *is*: today it records what happened, and with this it starts noticing what didn't. Every job would call the same services the endpoints already call, so it adds a scheduler rather than a second copy of the rules.
+
+### Fallback authority
+
+The decision made when chasing runs out of people to ask — the admin block during working hours, the security desk outside them, chosen at the moment it is needed rather than in advance.
+
+They see the photograph taken at the gate, must give a reason, and can either turn the visitor away or admit them on restricted terms: meeting point only, a short window, flagged for as long as the visit stays open.
+
+### Smaller things worth adding
+
+- **Unit tests** on the decision functions — the state machine, the flag rules, the group-size logic. They are near-pure and need no server to exercise.
+- **Persistence.** The storage layer is written as if a database were behind it, so this is a matter of filling in the repositories rather than rewriting the services.
+- **An account per host**, so approving a visit can check you are the host named on it rather than merely *a* faculty member.
+
+### What this means when you run it today
+
+Worth knowing before a demonstration: nothing *becomes* a problem while you watch. The visitors who are overstaying or unconfirmed start out that way, so every dashboard is correct and full the moment you open it — but no alarm fires mid-session, because the scheduler is what would fire it.
+
+Two counts on the honesty panel are zero for the same reason, and are shown as zero rather than hidden. Nothing in the system claims otherwise.
 
 ---
 
-## Before this goes anywhere real
+## Known weaknesses, kept on purpose
 
-Three things must be fixed first. All three are honest shortcuts that make the prototype convenient, and all three would make a real deployment indefensible.
+Three deliberate shortcuts, listed here rather than left to be discovered. Each one buys something a prototype genuinely needs — it runs with no setup, it demonstrates in a minute, it needs no external service — and each one has to be closed before this becomes a product. None is an oversight, and each is documented at the code that implements it as well as here.
 
-Authentication used to be the worst of them — a header you typed, believed without question, defaulting to administrator when absent. **That is now fixed.** Every endpoint requires a real login, and the old header grants nothing.
+Authentication used to be a fourth and the worst of them: a header you typed, believed without question, defaulting to administrator when absent. **That one is now closed.** Every endpoint requires a real login, and the old header grants nothing.
 
 ### 1. The four passwords are written into the repository
 
@@ -324,7 +356,7 @@ Two other limits worth knowing:
 - **`admin` still satisfies every role check.** With a real login behind it that is ordinary superuser behaviour rather than a hole, but it means one leaked password is total access.
 - **Identity stops at the role.** Logging in as `faculty` proves you are *a* faculty member, not *which* one. Approving a visit still doesn't check that you are the host named on it, because four fixed accounts cannot express thirty individual staff. That needs an account per host.
 
-**The fix:** accounts in a real store with per-person credentials, passwords set on first use rather than in source, and the host check tied to the logged-in user.
+**Closing it:** accounts in a real store with per-person credentials, passwords set on first use rather than written in source, and the host check tied to the logged-in user.
 
 ### 2. The signing key is published in this repository
 
@@ -335,7 +367,7 @@ WARNING  HMAC_SECRET is the built-in development default. Every pass
          signature is forgeable by anyone with this repository.
 ```
 
-**The fix takes a minute:**
+**Closing it takes a minute:**
 
 ```powershell
 cd D:\Projects\SVMS\Backend
@@ -349,9 +381,11 @@ The design here is sound — the weakness is entirely in key management, which i
 
 ### 3. Phone verification accepts any six digits
 
-There is no SMS gateway, so nothing is stored between sending a code and checking it. `POST /visitors/{id}/otp/verify` validates only that the code is six digits long — `000000` works. A real gateway replaces two small functions and nothing else changes.
+There is no SMS gateway, so nothing is kept between sending a code and checking it. `POST /visitors/{id}/otp/verify` validates only that the code is six digits long — `000000` works. This is what lets the system be demonstrated with no phone and no account anywhere.
 
-### One thing that is not a shortcut
+**Closing it** means swapping the two functions in `integrations/otp.py` for a real gateway. Nothing else in the system changes, because nothing else knows how the code is delivered.
+
+### One thing that is deliberately not a shortcut
 
 The identity hash taken from a government ID is stored but **never returned by any endpoint**. Responses list their fields explicitly instead of dumping the whole record, so a field added later cannot leak out by accident. Only the last four digits are returned, which is what a guard checks against a physical card.
 

@@ -73,7 +73,7 @@ async def get_visit(visit_id: str, _user=Depends(require_user())):
 async def get_visit_scans(visit_id: str, _user=Depends(require_user())):
     """The audit trail for one visit.
 
-    Empty until Phase 6 writes the first ScanEvent. It is exposed now because
+    Empty until the first scan writes a ScanEvent. It is exposed because
     the design lists it under Visits, and an endpoint that returns an honest
     empty list is better than one that 404s until a later phase.
     """

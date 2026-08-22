@@ -97,7 +97,7 @@ class Zone:
 @dataclass
 class Visit:
     """One visit by one accountable visitor, covering the whole group. status is assigned ONLY by transition() in
-    services/visit_service.py (Phase 2) - never anywhere else, per the design.
+    services/visit_service.py - never anywhere else.
     """
 
     id: str
@@ -128,7 +128,7 @@ class Visit:
     valid_from: datetime | None = None
     valid_to: datetime | None = None
 
-    # Set ONLY by fallback-decision (Phase 12, deferred) and cleared by
+    # Set ONLY by the fallback-authority decision, which is unbuilt, and cleared by
     # arrival-ack. In this build it arrives only from seed data.
     restricted: bool = False
 
@@ -153,8 +153,8 @@ class Visit:
     #: they record what was SENT, not what is currently true,
     # and cannot be recomputed after the fact.
     #
-    # Nothing in this build advances them - the jobs that would are Phase 11,
-    # which is deferred. They are created and left null, deliberately.
+    # Nothing in this build advances them - the jobs that would are unbuilt.
+    # They are created and left null, deliberately.
     approval_escalation_stage: str | None = None
     approval_escalated_at: datetime | None = None
     ack_escalation_stage: str | None = None
@@ -168,7 +168,7 @@ class Pass:
     """A signed QR plus its 6-digit fallback code.
 
     The payload carries only visit_id and nonce - never visitor data, never
-    the time window, never the zone list. Signing arrives at Phase 5.
+    the time window, never the zone list.
     """
 
     id: str

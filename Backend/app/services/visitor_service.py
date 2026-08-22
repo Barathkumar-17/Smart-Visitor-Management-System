@@ -135,7 +135,7 @@ def apply_vouch(visitor: Visitor, host_id: str, origin: str) -> Visitor:
 
     NOT AN ENDPOINT OF ITS OWN, deliberately. The design is explicit: vouching
     happens only through a host, only at approval, so that nobody can be
-    pre-cleared ahead of a visit. Phase 4's POST /visits/{id}/approve is the
+    pre-cleared ahead of a visit. POST /visits/{id}/approve is the
     only production caller.
 
     Three rules, in order:

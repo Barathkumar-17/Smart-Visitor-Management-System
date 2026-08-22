@@ -28,7 +28,7 @@ def list_by_visit(visit_id: str) -> list[ScanEvent]:
 
 
 def list_by_kind(visit_id: str, kind: str, result: str | None = None) -> list[ScanEvent]:
-    """Filtered history. Phase 13 derives no_destination_scan and
+    """Filtered history. The dashboards derive no_destination_scan and
     wrong_zone_scan from exactly this."""
     with memory.lock:
         return [

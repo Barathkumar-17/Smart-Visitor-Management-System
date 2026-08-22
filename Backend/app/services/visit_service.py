@@ -326,7 +326,7 @@ def approve_visit(
     The acting host is the visit's own host_id, not the caller - the design: the header establishes the ROLE, the path establishes the IDENTITY.
 
     The pass is issued as part of reaching `issued` - the design ends
-    approve with "pass generated". Phase 5 added that; through Phase 4 the
+    approve with "pass generated".
     visit reached `issued` with nothing behind it.
     """
     visit = visit_repo.get_or_404(visit_id)
@@ -440,8 +440,8 @@ def arrival_ack(
     record at the next scan. The visitor's QR is byte-identical before and
     after this call - the pass is a pointer, not a copy.
 
-    NOTHING ESCALATES IF THIS IS NEVER CALLED. The chasing job is Phase 11 and
-    deferred, so ack_escalation_stage stays null for the life of this build.
+    NOTHING ESCALATES IF THIS IS NEVER CALLED. The chasing job is not built,
+    so ack_escalation_stage stays null for the life of this build.
     That is a known gap, not an oversight.
     """
     visit = visit_repo.get_or_404(visit_id)

@@ -2,8 +2,8 @@
 
 Marked clearly and excluded from the main OpenAPI tags. None of this ships.
 
-Phase 0 added /dev/advance-clock and the role probe; Phase 1 adds /dev/reset.
-/dev/transition arrives at Phase 2 and /dev/notifications with the
+They exist so a demonstration can reset the campus, jump the clock, force a
+visit into a state, and read back the
 notification stub.
 """
 
@@ -51,7 +51,7 @@ class TransitionRequest(BaseModel):
 async def reset(_user=Depends(require_role("admin"))) -> dict[str, Any]:
     """Clear the store and reseed it, and put the clock offset back to zero.
 
-    Step 0 of every manual test script from Phase 1 onward, so a failed test
+    Step 0 of every test run, so a failed test
     cannot leave state that breaks the next one.
 
     Ids are deterministic across a reset because the counters reset first: the
@@ -100,8 +100,8 @@ async def force_transition(
 ) -> dict[str, Any]:
     """Drive the state machine directly.
 
-    Exists so the machine is testable at Phase 2, before any real endpoint
-    drives it - the first of those is POST /visits/{id}/approve at Phase 4 -
+    Exists so the state machine is drivable directly, without going through
+    the endpoints that normally drive it,
     and to force a visit into a given state during manual testing later.
 
     The actor is "dev:forced", so the log makes clear a

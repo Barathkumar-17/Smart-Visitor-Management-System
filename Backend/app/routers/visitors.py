@@ -35,7 +35,7 @@ async def register_visitor(body: VisitorCreate, _user=Depends(require_user())):
     """Register a visitor. Creates tier `temporary`.
 
     Verification is a separate step: DigiLocker below, or a host vouch at
-    approval (Phase 4). Registering alone confers no standing.
+    approval. Registering alone confers no standing.
     """
     return visitor_service.register(
         name=body.name,

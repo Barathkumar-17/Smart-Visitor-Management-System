@@ -3,16 +3,19 @@
 The prototype must be demoable the moment it starts, so this runs at startup
 and again on every /dev/reset.
 
-THIS FILE IS DELIBERATELY UNFINISHED. Some seeded records need capability that
-arrives later - a signed pass needs Phase 5's signing, a scan event needs Phase
-6's scan service. So it is written at Phase 1 and extended at Phases 3, 5 and 6.
-Records this build cannot yet produce are NOT faked here.
+What is seeded:
 
-Seeded at Phase 1:  zones, hosts, visitor A (+ requested visit),
-                    visitor C (+ fallback-admitted visit, already inside)
-Added at Phase 3:   photo refs for every seeded visitor, via storage.put()
-Added at Phase 5:   visitor B, her two companions and her signed pass
-Added at Phase 6:   visitors D, E and F, and the entry scans for C, D, E and F
+  accounts     the four fixed logins
+  reference    five zones, three hosts
+  visitor A    registered and DigiLocker-verified, with a requested visit
+  visitor C    admitted on restricted terms, currently inside
+  visitor B    vouched, two companions, a signed pass, not yet arrived
+  D, E and F   inside, each carrying one exception the dashboards report
+
+Records this build cannot produce are NOT faked here. Where a seeded visitor
+needs a state only an unimplemented flow could create - C's restricted
+admission is the one - the state is set directly and said so, rather than
+inventing an endpoint to manufacture it.
 
 Everything is created through a REPOSITORY, never by writing to a store dict,
 so seeded records have exactly the shape live ones do.
@@ -48,7 +51,7 @@ def _placeholder_photo(rgb: tuple[int, int, int]) -> str:
     There are no real photographs in a seeded prototype, and a stand-in that is
     obviously a stand-in beats a stock face that might be mistaken for one.
     Each seeded visitor gets a different colour so the gate-entry response at
-    Phase 6 visibly shows DIFFERENT images rather than one repeated blob.
+    the gate response visibly shows DIFFERENT images rather than one repeated blob.
 
     Generated rather than pasted as a base64 literal so it stays readable: an
     opaque 120-character string in a seed file tells the next reader nothing.
@@ -94,8 +97,8 @@ ZONES: list[tuple[str, str]] = [
 # Computer Science has TWO hosts so a department escalation has a real
 # recipient to notify, and Mechanical Engineering has ONE so the "department
 # with no other host" path - where a notification is still
-# written and the stage still advances - is reachable. Escalation is Phase 11
-# and deferred, but the fixture it will need exists now.
+# written and the stage still advances - is reachable. Escalation is unbuilt,
+# but the fixture it will need exists now.
 
 HOSTS: list[tuple[str, str, str, str]] = [
     (
@@ -150,7 +153,7 @@ def _seed_visitor_a(hosts: list[Host]) -> None:
     and the design defines her as DigiLocker-verified; the values are
     inert data of exactly the shape the stub produces.
 
-    Her photo DOES go through storage.put(), added at Phase 3 - unlike an id
+    Her photo DOES go through storage.put() - unlike an id
     hash, a hand-written photo ref would be a link to nothing.
     """
     visitor = visitor_repo.save(
@@ -190,10 +193,10 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     """Visitor C - fallback-admitted, already inside, RESTRICTED.
 
     C is the most load-bearing fixture in the seed. Nothing in the built scope
-    sets restricted = True: the only path is fallback-decision, which is Phase
-    12 and deferred. Without C seeded this way THREE things are dead - the
+    sets restricted = True: the only path is the fallback-authority decision,
+    which is not implemented. Without C seeded this way THREE things are dead - the
     `restricted` flag on /dashboard/inside, the restricted-admissions count on
-    the honesty panel, and Phase 8's restriction-lifting test, which has
+    the honesty panel, and the restriction-lifting test, which has
     nothing else to run against.
 
     Her shape follows what fallback-decision would have produced:
@@ -205,11 +208,11 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
       - host_acked_at is null: no host has ever been in the loop on this visit
 
     entry_at is 25 minutes back. That is past ACK_WINDOW (12 min), so
-    host_not_acked derives true and Phase 8 can prove that acknowledging clears
+    host_not_acked derives true, and acknowledging can be shown to clear
     it, but short of NO_SCAN_WINDOW (30 min), so she does not also trip
     no_destination_scan and blur which fixture demonstrates what.
 
-    Phase 6 completes her: she gets a real pass and is scanned in through the
+    She gets a real pass and is scanned in through the
     live gate-entry service, so her entry ScanEvent is indistinguishable from
     one a guard produced.
     """
@@ -265,8 +268,7 @@ def _seed_visitor_c(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
 def _seed_visitor_b(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     """Visitor B - vouched, pass issued, two linked companions, ready to scan in.
 
-    Added at Phase 5 because her pass needs signing, which did not exist
-    before. She is the fixture Phase 6's gate-entry demo runs on: the one
+    She is the fixture the gate-entry demo runs on: the one
     seeded visitor holding a valid, unused pass.
 
     Her group is three - herself plus two companions - so the entry response
@@ -454,9 +456,9 @@ def _seed_inside_visitor(
 def _seed_visitors_d_e_f(hosts: list[Host], zones_by_code: dict[str, Zone]) -> None:
     """D, E and F - the three exception fixtures.
 
-    Each exists to make ONE dashboard flag reachable at Phase 13. Nothing in
+    Each exists to make ONE dashboard flag reachable. Nothing in
     this build raises an exception flag live, because the jobs that would are
-    Phase 11 and deferred, so without these three every exceptions list renders
+    unbuilt, so without these three every exceptions list renders
     empty on first load and the demo dies.
 
       D  host_not_acked      entered 40 min ago, past ACK_WINDOW (12 min),
@@ -507,7 +509,7 @@ def _seed_visitors_d_e_f(hosts: list[Host], zones_by_code: dict[str, Zone]) -> N
     )
     # LIB is not on his allowed list, so this is exactly what a wrong-zone scan
     # produces. Written through the same _record() the live path uses; the
-    # endpoint that decides `wrong_zone` arrives at Phase 9.
+    # endpoint that decides `wrong_zone` is POST /scans/zone.
     with _clock_rewound_to(clock.now() - timedelta(minutes=8)):
         scan_service._record(visit_e.id, "zone", "wrong_zone", zone_id=lib.id)
     notifications.notify_security(
@@ -593,10 +595,8 @@ def reset() -> None:
     load()
 
 
-# --- Closed at Phase 3 ------------------------------------------------------
+# --- On photographs ---------------------------------------------------------
 #
-# photo_ref was null on both seeded visitors through Phases 1 and 2, because
-# setting one needs integrations/storage.py. Phase 3 built that stub, so both
-# now go through storage.put() like any live registration and GET /photos/{ref}
-# resolves them. The design records Phase 3 as a seed-extension phase for
-# exactly this reason.
+# Every seeded visitor's photo goes through storage.put() like any live
+# registration, so GET /photos/{ref} resolves it. Writing a ref straight onto
+# the record would be quicker and would leave a dangling pointer that 404s.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cumulative regression script. Every phase appends its happy path here and the
+# Cumulative regression script. Every feature appends its happy path here and the
 # whole file is run, not just the new part.
 #
 # EVERY STEP ASSERTS. Each response is piped through "jq -e" on a field that
@@ -57,7 +57,7 @@ AUTH_ADMIN=$(login admin admin123)
 
 
 # --- Step 0: reset ----------------------------------------------------------
-# Always first, from Phase 1 onward, so a failed run cannot leave state that
+# Always first, so a failed run cannot leave state that
 # breaks the next one. Ids above are deterministic because reset zeroes the id
 # counters before reseeding.
 
@@ -71,13 +71,13 @@ curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/dev/reset" \
            and .seeded.visits == 6' > /dev/null
 pass
 
-# --- Phase 0: skeleton ------------------------------------------------------
+# --- Skeleton ----------------------------------------------------------------
 
 step "0.1  GET /health -> status ok"
 curl -sS "$BASE/health" | jq -e '.status == "ok"' > /dev/null
 pass
 
-# --- Phase 1: entities and repositories -------------------------------------
+# --- Entities and repositories -----------------------------------------------
 
 step "1.1  GET /zones -> five seeded zones, MAIN present"
 curl -sS -H "$AUTH_ADMIN" "$BASE/zones" \
@@ -105,9 +105,10 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/visitors/vr_2" \
   | jq -e '.id == "vr_2" and .tier == "temporary"' > /dev/null
 pass
 
-# --- Phase 2: state machine -------------------------------------------------
+# --- State machine -----------------------------------------------------------
 # The full legal lifecycle on v_1, one row of the table per step.
-# v_2 is deliberately untouched: that is visitor C, and Phase 8 needs her still
+# v_2 is deliberately untouched: that is visitor C, and the acknowledgement
+# block needs her still
 # inside and unacknowledged.
 
 step "2.1  v_1 requested -> approved"
@@ -136,11 +137,11 @@ curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/dev/transition" -H 'Content-Type: appli
            and (.legal_moves_now | length) == 0' > /dev/null
 pass
 
-step "2.5  reset, so later phases do not inherit a closed v_1"
+step "2.5  reset, so later steps do not inherit a closed v_1"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/dev/reset" | jq -e '.reset == true' > /dev/null
 pass
 
-# --- Phase 3: registration and verification ---------------------------------
+# --- Registration and verification -------------------------------------------
 # A tiny valid PNG, so the photo path is exercised with real image bytes rather
 # than an arbitrary string that happens to be base64.
 PHOTO="iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAIUlEQVR4nGP8z0AKYCJJ9aiGUdBIDGH8//8/8bJDMcwBAI2fBAWYU0mvAAAAAElFTkSuQmCC"
@@ -189,7 +190,7 @@ for v in vr_1 vr_2 vr_3; do
 done
 pass
 
-# --- Phase 4: pass request and approval -------------------------------------
+# --- Pass request and approval -----------------------------------------------
 
 step "4.1  POST /visits with 2 companions -> requested, expected = 3"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits" -H 'Content-Type: application/json' \
@@ -267,7 +268,7 @@ curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits/v_7/cancel" -H 'Content-Type: ap
   | jq -e '.status == "cancelled" and .approval_reason == "Rescheduled"' > /dev/null
 pass
 
-step "4.10 GET /visits/{id}/scans -> empty audit trail until Phase 6"
+step "4.10 GET /visits/{id}/scans -> empty audit trail until the first scan"
 curl -sS -H "$AUTH_ADMIN" "$BASE/visits/v_7/scans" | jq -e 'type == "array"' > /dev/null
 pass
 
@@ -278,8 +279,8 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/dev/notifications" \
            and ([.notifications[].recipient] | map(startswith("visitor:")) | any)' > /dev/null
 pass
 
-# --- Phase 5: pass signing --------------------------------------------------
-# v_3 is visitor B, seeded at Phase 5 with an issued pass precisely so there is
+# --- Pass signing ------------------------------------------------------------
+# v_3 is visitor B, seeded with an issued pass precisely so there is
 # something signed to fetch before any live approval has run.
 
 step "5.1  GET /passes/v_3 -> seeded pass, signed, with a 6-digit code"
@@ -325,11 +326,11 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/visits/v_1" | jq -e --arg b "$BEFORE" '.status 
 pass
 
 
-# --- Phase 6: gate entry ----------------------------------------------------
+# --- Gate entry --------------------------------------------------------------
 # The core demo path. v_3 is visitor B, seeded with a signed pass and two
 # companions precisely so this scan leads with three faces.
 #
-# A reset first, because Phase 5 revoked v_1's pass and left v_1 issued.
+# A reset first, because the signing block revoked v_1's pass and left v_1 issued.
 
 step "6.0  reset before the gate-entry sequence"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/dev/reset" | jq -e '.reset == true' > /dev/null
@@ -428,10 +429,10 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/visits/v_3/scans" \
 pass
 
 
-# --- Phase 8: arrival acknowledgement ---------------------------------------
+# --- Arrival acknowledgement -------------------------------------------------
 # v_2 is visitor C, the ONLY restricted visit in this build. Nothing else can
-# produce one - fallback-decision is Phase 12 and deferred - so she is the sole
-# fixture this whole phase runs against.
+# produce one - the fallback-authority decision is unbuilt - so she is the sole
+# fixture this whole block runs against.
 
 step "8.0  reset, so C is restricted and unacknowledged again"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/dev/reset" > /dev/null
@@ -496,8 +497,8 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/dev/notifications" \
                                  and (.message | test("Restriction lifted")))' > /dev/null
 pass
 
-# --- Phase 9: zone scans and moving the meeting point ------------------------
-# Runs on v_4, visitor D, who is inside with a pass in her hand after Phase 8.
+# --- Zone scans and moving the meeting point ---------------------------------
+# Runs on v_4, visitor D, who is inside with a pass already in hand.
 # This is demo beat two: the QR must not change while everything around it does.
 
 step "9.1  capture D's QR and code6 BEFORE anything moves"
@@ -585,7 +586,7 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/visits/v_4/scans" \
                    .zone_id != null and .person_count_recorded == null)' > /dev/null
 pass
 
-# --- Phase 10: exit and close-out -------------------------------------------
+# --- Exit and close-out ------------------------------------------------------
 # The two ways a visit ends: a clean exit scan, and the guard's end-of-day
 # sweep for everything the exit scan could not resolve.
 
@@ -689,7 +690,7 @@ curl -sS -H "$AUTH_ADMIN" "$BASE/visits/v_3/scans" \
                     and .count_mismatch == true and .person_count_recorded == 2)' > /dev/null
 pass
 
-# --- Phase 13: dashboards ----------------------------------------------------
+# --- Dashboards --------------------------------------------------------------
 # OPENS WITH ITS OWN RESET. By this point the script has signed out or closed
 # almost every seeded visitor, so the dashboards would correctly report an
 # empty campus. The seeded state is the fixture these three endpoints exist to
@@ -771,13 +772,14 @@ pass
 step "13.9  and names every field it cannot fill, rather than hiding it"
 curl -sS "$BASE/dashboard/honesty" -H "$AUTH_ADMIN" \
   | jq -e '(.unavailable | keys | length) >= 2
-           and (.unavailable.walk_ins_denied_after_escalation | test("deferred"))' > /dev/null
+           and (.unavailable.walk_ins_denied_after_escalation | test("unbuilt"))' > /dev/null
 pass
 
 step "13.10  restricted admissions is an honest zero - this build performs none"
 # Seeded visitor C carries the restricted STATE so the dashboard flag has
 # something to render, but no admission was ever performed: fallback-decision
-# is Phase 12 and deferred. The flag and the count answer different questions,
+# the fallback-authority decision is unbuilt. The flag and the count answer
+# different questions,
 # which is why one is true while the other is zero.
 curl -sS "$BASE/dashboard/honesty" -H "$AUTH_ADMIN" \
   | jq -e '(.restricted_admissions_by_approver | length) == 0' > /dev/null

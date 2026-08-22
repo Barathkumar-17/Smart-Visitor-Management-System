@@ -9,7 +9,7 @@ That is also why this is the only file that reads flags. If a second definition
 of `overstaying` appears anywhere else in the codebase, one of them is already
 wrong.
 
-WHAT THIS BUILD CANNOT PRODUCE. Phase 11's scheduler is deferred, so nothing
+WHAT THIS BUILD CANNOT PRODUCE. The scheduler is not implemented, so nothing
 BECOMES an exception while you watch - the seeded visitors carry those states
 from the start. The dashboards are correct either way, because they read the
 data rather than the jobs. Nothing here fakes a job to compensate.
@@ -271,11 +271,11 @@ def honesty() -> dict:
     # RESTRICTED ADMISSIONS ARE STRUCTURALLY ZERO IN THIS BUILD, and this is a
     # decided position rather than an oversight. The count is of admissions
     # this system PERFORMED on restricted terms, and the only endpoint that
-    # performs one is fallback-decision, which is deferred with Phase 12.
+    # performs one is the fallback-authority decision, which is not built.
     # Seeded visitor C carries the restricted state so the dashboard flag has
     # something to render, but no admission ever took place - she is a fixture,
-    # not a record of an act. Phase 12 fills this in by counting its own
-    # decisions; nothing else should.
+    # not a record of an act. Whoever builds fallback authority fills this in
+    # by counting its own decisions; nothing else should.
     restricted_by_approver: dict[str, int] = {}
     walk_ins_denied = 0
     ack_pairs: list[tuple[str, float]] = []
@@ -321,11 +321,11 @@ def honesty() -> dict:
                 "created_at says when the request arrived, and nothing sits between "
                 "them. Adding approved_at to the Visit entity is the whole fix.",
             "walk_ins_denied_after_escalation":
-                "Walk-in registration (Phase 7) and fallback authority (Phase 12) are "
-                "both deferred, so no visit can have origin walk_in or reach denied. "
+                "Walk-in registration and fallback authority are both unbuilt, so no "
+                "visit can have origin walk_in or reach denied. "
                 "This zero is true, not missing.",
             "restricted_admissions_by_approver":
-                "Fallback authority (Phase 12) is deferred, so no admission on "
+                "Fallback authority is not built, so no admission on "
                 "restricted terms is ever performed by this build. Seeded visitor C "
                 "carries the restricted state for the dashboard flag to render, but "
                 "she is a fixture rather than a record of an act. This zero is true.",

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.config import LOCAL_TZ
 
-# Additive and cumulative. /dev/advance-clock adds to it; /dev/reset (Phase 1)
+# Additive and cumulative. /dev/advance-clock adds to it; /dev/reset
 # sets it back to zero via reset_offset().
 _offset: timedelta = timedelta(0)
 
@@ -60,6 +60,6 @@ def offset() -> timedelta:
 
 
 def reset_offset() -> None:
-    """Set the offset back to zero. Called by /dev/reset at Phase 1."""
+    """Set the offset back to zero. Called by /dev/reset."""
     global _offset
     _offset = timedelta(0)

@@ -30,7 +30,7 @@ async def get_pass(visit_id: str, _user=Depends(require_user())):
 
     The same visit returns a BYTE-IDENTICAL qr object every time, including
     after a meeting-point change or a window extension - neither is in the
-    payload. Phase 9 demonstrates exactly that.
+    payload. PATCH /visits/{id}/meeting-point demonstrates exactly that.
     """
     return _to_out(pass_service.get_pass_for_visit(visit_id))
 

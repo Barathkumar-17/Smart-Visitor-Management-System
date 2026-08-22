@@ -2,7 +2,7 @@
 
 Run with: uvicorn app.main:app --reload
 
-THIS FILE DOES NOT START THE SCHEDULER. Phase 11 is deferred, jobs/scheduler.py
+THIS FILE DOES NOT START THE SCHEDULER. It is not implemented, jobs/scheduler.py
 is empty, and adding the startup call is part of that phase, not this one.
 """
 

@@ -147,7 +147,7 @@ def resolve_scan(
     requires every scan endpoint to return 200 carrying its outcome so the
     ScanEvent can never be lost to an early exit.
 
-    Every scan endpoint from Phase 6 onward comes through here, so the two
+    Every scan endpoint comes through here, so the two
     lookups are defined once rather than three times.
     """
     if code6:

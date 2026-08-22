@@ -12,8 +12,8 @@ TWO RULES GOVERN EVERYTHING IN THIS FILE.
    a scan that raised would tempt a caller to abandon the
    request before the event was written.
 
-Phase 6 implements gate entry and Phase 9 the zone scan. Both end at _record()
-below, which is the single writer; exit (Phase 10) will too.
+Gate entry, the zone scan and the exit all end at _record() below, which is
+the single writer.
 """
 
 import logging
@@ -247,7 +247,7 @@ def gate_entry(
     visit_service.transition(visit, "inside", "guard:u_guard")
 
     visit.entry_at = now
-    # Store the plate that ACTUALLY arrived, so the exit comparison at Phase 10
+    # Store the plate that ACTUALLY arrived, so the exit comparison
     # is against what entered rather than against what was declared weeks ago.
     # The declared value survives on the ScanEvent as plate_mismatch.
     if vehicle_plate:

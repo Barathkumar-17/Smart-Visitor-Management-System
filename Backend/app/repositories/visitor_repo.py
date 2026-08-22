@@ -45,7 +45,7 @@ def count() -> int:
 
 
 def find_by_phone(phone: str) -> Visitor | None:
-    """Lookup used by the returning-walk-in path at Phase 3."""
+    """Lookup by phone, so a returning visitor is not registered twice."""
     with memory.lock:
         for visitor in memory.visitors.values():
             if visitor.phone == phone:
