@@ -17,7 +17,21 @@ load_dotenv()
 
 # --- Secrets and locale -----------------------------------------------------
 
-HMAC_SECRET: str = os.getenv("HMAC_SECRET", "dev-secret-change-me")
+# The pass signature is the ENTIRE basis on which the gate admits anyone: the
+# QR carries only a visit id and a nonce, and a matching HMAC is what proves
+# this system issued it. Anyone holding this secret can mint a valid QR for any
+# visit id - no approval, no host, no account. Forging a pass and walking
+# through the gate become the same act.
+#
+# The fallback below is committed to the repository, so it protects nothing. It
+# exists so the app runs with no .env during development. main.py logs a warning
+# whenever it is in use; see DEFAULT_HMAC_SECRET_IN_USE.
+DEV_HMAC_SECRET = "dev-secret-change-me"
+
+HMAC_SECRET: str = os.getenv("HMAC_SECRET", DEV_HMAC_SECRET)
+
+# True when signing is running on the committed default rather than a real key.
+DEFAULT_HMAC_SECRET_IN_USE: bool = HMAC_SECRET == DEV_HMAC_SECRET
 
 # Every "today" comparison and WORKING_HOURS is evaluated in this zone, never
 # in UTC. SPEC section 16.7.

@@ -22,7 +22,7 @@ from app.repositories import (
     visitor_repo,
     zone_repo,
 )
-from app.services import visit_service, visitor_service
+from app.services import visit_service
 from app.store import seed
 
 router = APIRouter(prefix="/dev", tags=["dev"], include_in_schema=False)
@@ -31,16 +31,6 @@ router = APIRouter(prefix="/dev", tags=["dev"], include_in_schema=False)
 class AdvanceClockRequest(BaseModel):
     minutes: int = Field(
         description="Minutes to shift the clock forward. Additive and cumulative."
-    )
-
-
-class VouchRequest(BaseModel):
-    visitor_id: str
-    host_id: str
-    origin: str = Field(
-        default="pre_registered",
-        description="pre_registered grants VOUCH_VALIDITY_DAYS of standing; "
-        "walk_in grants none, per SPEC section 7.",
     )
 
 
@@ -124,44 +114,6 @@ async def force_transition(body: TransitionRequest) -> dict[str, Any]:
         "to": visit.status,
         "is_terminal": visit_service.is_terminal(visit.status),
         "legal_moves_now": visit_service.legal_moves(visit.status),
-    }
-
-
-@router.post("/vouch")
-async def force_vouch(body: VouchRequest) -> dict[str, Any]:
-    """Apply a host vouch directly, WITHOUT going through approval.
-
-    SPEC section 7 is emphatic that vouching happens only through a host and
-    only at approval, so that nobody can be pre-cleared ahead of a visit. That
-    rule governs the PRODUCTION surface; POST /visits/{id}/approve at Phase 4
-    is the only endpoint that will ever call apply_vouch() for real.
-
-    This route exists for the same reason SPEC section 10 gives for
-    /dev/transition - "so the state machine is testable before any real
-    endpoint drives it". Without it, Phase 3 cannot test the section 7 rule
-    that DigiLocker OVERRIDES an existing vouch, because at Phase 3 nothing can
-    create a vouch to override.
-
-    Prototype-only, excluded from the schema, and a candidate for deletion once
-    Phase 4 makes it redundant.
-    """
-    visitor = visitor_service.get_visitor(body.visitor_id)
-    before = {"tier": visitor.tier, "verified_by": visitor.verified_by}
-
-    visitor_service.apply_vouch(visitor, body.host_id, body.origin)
-
-    return {
-        "visitor_id": visitor.id,
-        "before": before,
-        "after": {
-            "tier": visitor.tier,
-            "verified_by": visitor.verified_by,
-            "vouched_by_host_id": visitor.vouched_by_host_id,
-            "verified_until": (
-                visitor.verified_until.isoformat() if visitor.verified_until else None
-            ),
-            "is_permanent": visitor.is_permanent,
-        },
     }
 
 

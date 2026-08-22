@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from app.core import clock
+from app.core.config import DEFAULT_HMAC_SECRET_IN_USE
 from app.core.errors import DomainError, domain_error_handler
 from app.routers import dev, reference, visitors, visits
 from app.store import seed
@@ -34,6 +35,12 @@ async def lifespan(app: FastAPI):
     SPEC section 13: the prototype must be demoable the moment it starts, so
     the store is never empty. /dev/reset reloads exactly the same data.
     """
+    if DEFAULT_HMAC_SECRET_IN_USE:
+        logging.getLogger("app.core.config").warning(
+            "HMAC_SECRET is the built-in development default. Every pass "
+            "signature is forgeable by anyone with this repository. Set "
+            "HMAC_SECRET in .env before running this anywhere reachable."
+        )
     seed.load()
     yield
 

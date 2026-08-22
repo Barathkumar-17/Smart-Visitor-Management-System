@@ -19,12 +19,12 @@ Never build a phase the Current state block does not list as next. When I approv
 Rewrite these six lines in place every time. Do not add lines, remove lines, or reword the labels — a fresh session greps for them.
 
 ```
-NEXT_PHASE: 4 — Request & approval
-PHASES_COMPLETE: 0,1,2,3
+NEXT_PHASE: 5 — Signing
+PHASES_COMPLETE: 0,1,2,3,4
 PHASES_IN_SCOPE: 0,1,2,3,4,5,6,8,9,10,13
 ASSUMPTIONS_CONFIRMED: yes — SPEC §4 and §16 are settled
 CONFIG_STATUS: unvalidated proposals — reviewed at Phase 13, where ACK_WINDOW and NO_SCAN_WINDOW become visible on the dashboards
-LAST_UPDATED: 2026-08-22 — Phase 3 tested and approved
+LAST_UPDATED: 2026-08-22 — Phase 4 tested and approved
 ```
 
 Keep this block accurate. It is the only thing telling a fresh session where the build actually is.
@@ -241,3 +241,11 @@ Newest at the bottom. Format: `[phase] what changed — was X, now Y`
 - `[3]` DigiLocker override RETAINS `vouched_by_host_id` and `verified_until` — §7 requires both queryable so administration can trace who vouched for a visitor who later causes problems. Erasing them on upgrade would destroy that record.
 - `[3]` `POST /visitors` requires only `name` and `phone`; address, email and photo are optional. §3 describes a full registration, but blocking a partial record adds a rule with no safety value.
 - `[3]` `.gitignore` added at the repository root and 35 tracked `__pycache__` files untracked. Not a SPEC matter; recorded because it changes what a fresh clone contains.
+- `[4]` `approve` does NOT create a Pass record — §10 ends approve with "pass generated", but a Pass needs the signature and `code6` only Phase 5 can produce. The visit reaches `issued`; Phase 5 fills the pass in behind it.
+- `[4]` `allowed_zones` and `meeting_zone_id` take zone IDS, not codes. §8 mentions an "unknown zone code" but `meeting_zone_id` is plainly an id and the seed uses ids; mixing both in one body would be worse. Scan endpoints still take CODES, since a scanner reads a code.
+- `[4]` The meeting zone is auto-added to `allowed_zones` on approve — approving someone to a meeting point they may not enter would flag a wrong-zone scan for doing exactly what they were told.
+- `[4]` Reject and cancel reasons are stored in `approval_reason`. SPEC does not say where; `closed_reason` has a constrained vocabulary in §10 reserved for close-out.
+- `[4]` `GET /visits/{id}/scans` built at Phase 4 returning an empty list — it is in §10's Visits block, and an honest empty array beats a 404 until Phase 6 writes the first ScanEvent.
+- `[4]` Naive datetimes are rejected with 422 by a Pydantic validator on `scheduled_at`, `valid_from` and `valid_to` — §16.7 requires an offset, and a naive value would silently shift a window by 5.5 hours in this deployment.
+- `[5]` `POST /dev/vouch` deleted — Phase 4's `approve` is the real vouch path, so the temporary route added at Phase 3 is redundant and §7 bans a standalone vouch endpoint. Nothing outward-facing changed; it was never in the schema.
+- `[5]` `HMAC_SECRET` keeps its built-in development default so the app runs with no `.env`, but startup logs a warning whenever that default is in use, and `.env.example` now carries an obvious placeholder rather than a working value. Confirmed in chat.
