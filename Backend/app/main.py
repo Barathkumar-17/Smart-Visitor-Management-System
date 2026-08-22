@@ -28,9 +28,9 @@ from app.routers import (
 from app.store import seed
 
 # The state machine writes one audit line per status change, naming the actor
-#. No entity stores that string, so the
-# log IS the audit trail - and uvicorn leaves the root logger at WARNING, which
-# would silently drop every successful transition and keep only the failures.
+# that caused it. No entity stores that string, so the log IS the audit trail -
+# and uvicorn leaves the root logger at WARNING, which would silently drop
+# every successful transition and keep only the failures.
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)-8s %(name)s: %(message)s",
@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
         logging.getLogger("app.core.config").warning(
             "HMAC_SECRET is the built-in development default. Every pass "
             "signature is forgeable by anyone with this repository. Set "
-            "HMAC_SECRET in.env before running this anywhere reachable."
+            "HMAC_SECRET in .env before running this anywhere reachable."
         )
     seed.load()
     yield

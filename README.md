@@ -10,7 +10,7 @@ Nothing is saved to disk. It runs entirely in memory, starts with a realistic ca
 
 ---
 
-## The problem it solves
+## Overview
 
 At most campus gates today a visitor writes their name in a paper register, the guard rings the host, and the host either answers or doesn't. Nobody can tell you who is on campus right now. Nobody notices when a visitor wanders somewhere they shouldn't. And when someone forgets to sign out, they stay in that register forever.
 
@@ -22,7 +22,7 @@ The rule the whole system follows: **firm control at the gate, quiet observation
 
 ---
 
-## How a visit works
+## Visit lifecycle
 
 1. **The visitor registers.** Name and phone at minimum, confirmed by a one-time code. Verifying a government ID makes them permanently trusted; otherwise a staff member can vouch for them for 100 days, with the voucher's name kept on the record.
 
@@ -38,7 +38,7 @@ The rule the whole system follows: **firm control at the gate, quiet observation
 
 ---
 
-## The one idea worth understanding
+## Design approach
 
 **The QR code contains almost nothing** — a visit number and a random string. No name, no zones, no expiry, no photo.
 
@@ -52,7 +52,7 @@ The code is also **signed**, so it cannot be forged or altered. You can watch al
 
 ---
 
-## Getting it running
+## Installation
 
 You need **Python 3.11 or newer**. Packages live in a `.venv` folder at the top level, separate from anything else on your machine.
 
@@ -89,7 +89,7 @@ clock_offset_minutes  : 0
 
 ---
 
-## Logging in
+## Authentication
 
 **Every endpoint needs a login.** The only two exceptions are `/health` and the login itself.
 
@@ -125,7 +125,7 @@ Tokens last 12 hours and survive a reset. `POST /auth/logout` ends one early.
 
 ---
 
-## Who is already in the system
+## Seed data
 
 It starts with a campus mid-morning, so there is something to look at immediately. You never have to set anything up.
 
@@ -154,15 +154,15 @@ Every name, number and id comes back identical, so nothing you do is permanent. 
 
 ---
 
-## See it working in four minutes
+## Walkthrough
 
-With the four tokens from the section above in hand, start from a clean campus:
+With the four tokens from **Authentication** in hand, start from a clean campus:
 
 ```powershell
 Invoke-RestMethod -Method Post "$B/dev/reset" -Headers $admin | Out-Null
 ```
 
-### One — somebody arrives at the gate
+### 1. Arrival at the gate
 
 Suresh Iyer, with two people and a van.
 
@@ -196,7 +196,7 @@ Three faces to compare, and the host's phone number so the guard can ring them d
 
 **Try changing the plate to `TN-99-ZZ-0001`.** They are still admitted — but `vehicle.mismatch` comes back true and security is told.
 
-### Two — the meeting moves, the QR does not
+### 2. Moving the meeting point
 
 Fatima Sheikh is already inside, expected at the Department Office.
 
@@ -236,7 +236,7 @@ DEPT   wrong_zone
 
 (The signature differs after every reset — what matters is that the two lines match each other.)
 
-### Three — who is on campus
+### 3. The dashboards
 
 ```powershell
 $inside = Invoke-RestMethod "$B/dashboard/inside" -Headers $security
@@ -263,22 +263,34 @@ Longest inside at the top, each carrying the problem they represent — one over
 
 ---
 
-## Testing all of it at once
+## Testing
 
-There is a script that exercises every feature in order and stops the instant anything is wrong. It needs Git Bash and `jq` (`winget install jqlang.jq`, then open a fresh terminal).
+Two suites, and they check different things.
 
-With the server running, in a second window:
+### Unit tests
+
+```powershell
+cd D:\Projects\SVMS\Backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+84 tests, under a second. They cover the decisions rather than the plumbing: the legal-move table behind every status change, the six dashboard warning flags, the group-size rules, password hashing, and pass signing including what happens when a payload is tampered with.
+
+### End-to-end tests
 
 ```powershell
 cd D:\Projects\SVMS\Backend
 bash smoke.sh
 ```
 
-100 checks. Every one asserts on a specific field, so a wrong answer halts the script at the step that produced it. The last line should read `All steps passed.`
+100 checks against a live server, in the order a real visit happens. Needs Git Bash and `jq` (`winget install jqlang.jq`, then open a fresh terminal). Every step asserts on a specific field, so a wrong answer halts the run at the step that produced it. The last line should read `All steps passed.`
+
+Timestamps in it are computed from the clock rather than written in — a fixed date would make it pass all morning and fail in the evening.
 
 ---
 
-## What is built
+## Implemented features
 
 | Area | |
 |---|---|
@@ -295,7 +307,7 @@ Full detail per endpoint is in [`Backend/API.md`](Backend/API.md).
 
 ---
 
-## Where this goes next
+## Roadmap
 
 The design covers more than the current build implements. Three pieces are fully specified and are the natural next work — each extends what is already here rather than replacing any of it.
 
@@ -307,7 +319,7 @@ Walk-ins would be chased on much shorter timers than booked visits, seven minute
 
 **Most of this already exists.** Registration, phone verification, vouching and the whole scan path are built; what it needs is the endpoint that opens a visit from the gate.
 
-### The background scheduler
+### Background scheduler
 
 Five jobs on a two-minute cycle:
 
@@ -327,13 +339,13 @@ The decision made when chasing runs out of people to ask — the admin block dur
 
 They see the photograph taken at the gate, must give a reason, and can either turn the visitor away or admit them on restricted terms: meeting point only, a short window, flagged for as long as the visit stays open.
 
-### Smaller things worth adding
+### Further improvements
 
-- **Unit tests** on the decision functions — the state machine, the flag rules, the group-size logic. They are near-pure and need no server to exercise.
+- **Wider test coverage.** The decision functions are covered; the service layer above them is only exercised end-to-end by `smoke.sh`, which needs a running server.
 - **Persistence.** The storage layer is written as if a database were behind it, so this is a matter of filling in the repositories rather than rewriting the services.
 - **An account per host**, so approving a visit can check you are the host named on it rather than merely *a* faculty member.
 
-### What this means when you run it today
+### Current behaviour
 
 Worth knowing before a demonstration: nothing *becomes* a problem while you watch. The visitors who are overstaying or unconfirmed start out that way, so every dashboard is correct and full the moment you open it — but no alarm fires mid-session, because the scheduler is what would fire it.
 
@@ -341,13 +353,13 @@ Two counts on the honesty panel are zero for the same reason, and are shown as z
 
 ---
 
-## Known weaknesses, kept on purpose
+## Known limitations
 
 Three deliberate shortcuts, listed here rather than left to be discovered. Each one buys something a prototype genuinely needs — it runs with no setup, it demonstrates in a minute, it needs no external service — and each one has to be closed before this becomes a product. None is an oversight, and each is documented at the code that implements it as well as here.
 
 Authentication used to be a fourth and the worst of them: a header you typed, believed without question, defaulting to administrator when absent. **That one is now closed.** Every endpoint requires a real login, and the old header grants nothing.
 
-### 1. The four passwords are written into the repository
+### 1. Credentials held in source
 
 `Backend/app/store/seed.py` contains the accounts and their plain-text passwords. They are stored hashed, so dumping the running store gives nothing away — but anyone who can read this code knows all four logins, which makes the login a demonstration of the mechanism rather than actual protection.
 
@@ -358,7 +370,7 @@ Two other limits worth knowing:
 
 **Closing it:** accounts in a real store with per-person credentials, passwords set on first use rather than written in source, and the host check tied to the logged-in user.
 
-### 2. The signing key is published in this repository
+### 2. Default signing key
 
 QR codes are signed so they cannot be forged, and that signature is the entire basis on which the gate admits anyone. The key has a built-in default value visible to anyone holding a copy of this code. On startup you will see:
 
@@ -379,25 +391,28 @@ Passes signed with the old key stop working, which is correct. `.env.example` sh
 
 The design here is sound — the weakness is entirely in key management, which is the part a real deployment has to supply.
 
-### 3. Phone verification accepts any six digits
+### 3. Phone verification not enforced
 
 There is no SMS gateway, so nothing is kept between sending a code and checking it. `POST /visitors/{id}/otp/verify` validates only that the code is six digits long — `000000` works. This is what lets the system be demonstrated with no phone and no account anywhere.
 
 **Closing it** means swapping the two functions in `integrations/otp.py` for a real gateway. Nothing else in the system changes, because nothing else knows how the code is delivered.
 
-### One thing that is deliberately not a shortcut
+### Identity data handling
 
 The identity hash taken from a government ID is stored but **never returned by any endpoint**. Responses list their fields explicitly instead of dumping the whole record, so a field added later cannot leak out by accident. Only the last four digits are returned, which is what a guard checks against a physical card.
 
 ---
 
-## Where things are
+## Project structure
 
 | File | What it is |
 |---|---|
 | `README.md` | This file — what it is, how to run it, what to look at |
 | `Backend/API.md` | Every endpoint, what it returns, and what each failure means |
-| `Backend/smoke.sh` | The 100-check test script |
+| `Backend/requirements.txt` | Runtime dependencies, pinned to exact versions |
+| `Backend/requirements-dev.txt` | Adds `pytest` and `httpx` for the test suite |
+| `Backend/tests/` | Unit tests — run with `pytest`, no server needed |
+| `Backend/smoke.sh` | End-to-end script, 100 checks against a running server |
 | `Backend/app/` | The code |
 
 Inside `Backend/app/`: `routers/` receive requests, `services/` hold the rules, `repositories/` are the only code that touches storage, and `store/` holds the in-memory data and the seed. A request goes router → service → repository and never skips a layer.

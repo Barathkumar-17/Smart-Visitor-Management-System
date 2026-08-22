@@ -1,5 +1,6 @@
-fastapi
-uvicorn[standard]
-pydantic
-apscheduler
-python-dotenv
+# Pinned exactly, so a fresh clone installs what this was built and tested
+# against. Loosen deliberately, not by leaving versions off.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.4
+python-dotenv==1.2.3

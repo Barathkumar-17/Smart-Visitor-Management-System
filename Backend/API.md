@@ -8,7 +8,7 @@ For an explanation of what the system *is*, see [the README](../README.md). This
 
 ---
 
-## Log in first
+## Authentication
 
 **Every endpoint needs a token.** The only exceptions are `POST /auth/login` and `GET /health`.
 
@@ -72,7 +72,7 @@ The one exception is `422`, which keeps the framework's own format.
 
 ---
 
-## Registering a visitor
+## Visitor registration
 
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
@@ -88,7 +88,7 @@ The one exception is `422`, which keeps the framework's own format.
 
 ---
 
-## Requesting a pass and approving it
+## Pass requests and approval
 
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
@@ -104,7 +104,7 @@ The one exception is `422`, which keeps the framework's own format.
 
 ---
 
-## The pass
+## Passes
 
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
@@ -115,7 +115,7 @@ The QR holds **only** `visit_id` and `nonce`. Zones and the expiry are read from
 
 ---
 
-## Arriving, moving around, leaving
+## Entry, movement and exit
 
 All three scan endpoints return `200` even when the answer is no.
 
@@ -148,7 +148,7 @@ All three scan endpoints return `200` even when the answer is no.
 
 ---
 
-## The dashboards
+## Dashboards
 
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
@@ -171,7 +171,7 @@ Two keys on the exceptions screen are spelled differently from their flags: `wro
 
 ---
 
-## Reference
+## Reference data
 
 | Endpoint | Role | What it does | Returns |
 |---|---|---|---|
@@ -183,7 +183,7 @@ Zone **ids** (`z_2`) go in request bodies. Zone **codes** (`LIB`) go in scan bod
 
 ---
 
-## For demonstrating only
+## Development endpoints
 
 None of these would exist in a real deployment. All except `/dev/notifications` and `/dev/whoami` require the `admin` role.
 
@@ -199,9 +199,9 @@ None of these would exist in a real deployment. All except `/dev/notifications` 
 
 ---
 
-## Four PowerShell traps
+## PowerShell notes
 
-Windows PowerShell will bite you in three specific ways here. All three cost real time to work out from scratch.
+Windows PowerShell behaves unexpectedly in four ways here. Each one costs real time to work out from scratch.
 
 **1. Variable names ignore case.** `$b` and `$B` are the same variable. If your base URL is `$B`, never use `$b` for a body — the URL silently becomes a hashtable and you get *Invalid URI: The hostname could not be parsed*.
 
@@ -233,6 +233,6 @@ Invoke-RestMethod -Method Post "$B/scans/gate/entry" -ContentType application/js
 
 ---
 
-## Poking at it in a browser
+## Interactive documentation
 
 `http://127.0.0.1:8000/docs` lists every endpoint with a **Try it out** button, fills in the body shape for you, and shows the exact response. For anything you only need to run once, it is faster than the terminal.

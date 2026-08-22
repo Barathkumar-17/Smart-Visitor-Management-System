@@ -24,8 +24,8 @@ load_dotenv()
 # through the gate become the same act.
 #
 # The fallback below is committed to the repository, so it protects nothing. It
-# exists so the app runs with no.env during development. main.py logs a warning
-# whenever it is in use; see DEFAULT_HMAC_SECRET_IN_USE.
+# exists so the app runs with no .env file during development. main.py logs a
+# warning whenever it is in use; see DEFAULT_HMAC_SECRET_IN_USE.
 DEV_HMAC_SECRET = "dev-secret-change-me"
 
 HMAC_SECRET: str = os.getenv("HMAC_SECRET", DEV_HMAC_SECRET)

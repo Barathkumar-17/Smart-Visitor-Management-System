@@ -149,9 +149,9 @@ class Visit:
     # approval chain cannot be mistaken for an active acknowledgement one.
     # Each advances null -> department -> fallback -> exhausted, never back.
     #
-    # These four fields are the ONE exception to "derive flags at read time"
-    #: they record what was SENT, not what is currently true,
-    # and cannot be recomputed after the fact.
+    # These four fields are the ONE exception to "derive flags at read time":
+    # they record what was SENT, not what is currently true, and cannot be
+    # recomputed after the fact.
     #
     # Nothing in this build advances them - the jobs that would are unbuilt.
     # They are created and left null, deliberately.

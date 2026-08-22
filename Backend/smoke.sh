@@ -55,6 +55,17 @@ AUTH_FACULTY=$(login faculty faculty123)
 AUTH_SECURITY=$(login security security123)
 AUTH_ADMIN=$(login admin admin123)
 
+# --- Timestamps ---------------------------------------------------------------
+# Computed from the clock, never written in. A fixed date turns this script into
+# a time bomb: it passes all day and starts failing after the hour it names,
+# because the seeded visits are created relative to now and a fixed one is not.
+ts() { date -u -d "$1" +%Y-%m-%dT%H:%M:%SZ; }
+
+T_PAST=$(ts '-1 hour')
+T_SOON=$(ts '+1 hour')
+T_LATER=$(ts '+4 hours')
+T_TOMORROW=$(ts 'tomorrow 10:00')
+
 
 # --- Step 0: reset ----------------------------------------------------------
 # Always first, so a failed run cannot leave state that
@@ -195,7 +206,7 @@ pass
 step "4.1  POST /visits with 2 companions -> requested, expected = 3"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Lab tour",
-       "scheduled_at":"2026-08-22T15:00:00+05:30","vehicle_plate":"TN-01-AA-1111",
+       "scheduled_at":"'"$T_SOON"'","vehicle_plate":"TN-01-AA-1111",
        "companions":[{"name":"Arun"},{"name":"Meena"}]}' \
   | jq -e '.id == "v_7"
            and .status == "requested"
@@ -216,8 +227,8 @@ pass
 step "4.4  approve -> requested through approved to issued, in one call"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits/v_7/approve" -H 'Content-Type: application/json' \
   -d '{"meeting_zone_id":"z_1","allowed_zones":["z_2","z_5"],
-       "valid_from":"2026-08-22T15:00:00+05:30",
-       "valid_to":"2026-08-22T19:00:00+05:30","vouch":false}' \
+       "valid_from":"'"$T_PAST"'",
+       "valid_to":"'"$T_LATER"'","vouch":false}' \
   | jq -e '.status == "issued"
            and .approved_by == "faculty:h_1"
            and .meeting_zone_id == "z_1"
@@ -227,7 +238,7 @@ pass
 step "4.5  four companions is legal (1 + 4 = 5 total)"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Group of five",
-       "scheduled_at":"2026-08-23T10:00:00+05:30",
+       "scheduled_at":"'"$T_TOMORROW"'",
        "companions":[{"name":"a"},{"name":"b"},{"name":"c"},{"name":"d"}]}' \
   | jq -e '.person_count_expected == 5' > /dev/null
 pass
@@ -235,7 +246,7 @@ pass
 step "4.6  person_count path -> used as-is, no companion records"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d '{"visitor_id":"vr_1","host_id":"h_1","purpose":"Large group",
-       "scheduled_at":"2026-08-23T11:00:00+05:30","person_count":12}' \
+       "scheduled_at":"'"$T_TOMORROW"'","person_count":12}' \
   | jq -e '.person_count_expected == 12' > /dev/null
 pass
 
@@ -244,11 +255,11 @@ NEWV=$(curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visitors" -H 'Content-Type: appl
   -d '{"name":"Kavitha S","phone":"+91-98400-33333"}' | jq -r '.id')
 NEWVIS=$(curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits" -H 'Content-Type: application/json' \
   -d "{\"visitor_id\":\"$NEWV\",\"host_id\":\"h_2\",\"purpose\":\"Vouched visit\",
-       \"scheduled_at\":\"2026-08-22T16:00:00+05:30\"}" | jq -r '.id')
+       \"scheduled_at\":\"$T_SOON\"}" | jq -r '.id')
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits/$NEWVIS/approve" -H 'Content-Type: application/json' \
   -d '{"meeting_zone_id":"z_1","allowed_zones":[],
-       "valid_from":"2026-08-22T15:00:00+05:30",
-       "valid_to":"2026-08-22T19:00:00+05:30","vouch":true}' > /dev/null
+       "valid_from":"'"$T_PAST"'",
+       "valid_to":"'"$T_LATER"'","vouch":true}' > /dev/null
 curl -sS -H "$AUTH_ADMIN" "$BASE/visitors/$NEWV" \
   | jq -e '.tier == "verified"
            and .verified_by == "vouch"
@@ -306,8 +317,8 @@ pass
 step "5.4  approve now issues a pass of its own"
 curl -sS -H "$AUTH_ADMIN" -X POST "$BASE/visits/v_1/approve" -H 'Content-Type: application/json' \
   -d '{"meeting_zone_id":"z_1","allowed_zones":["z_2"],
-       "valid_from":"2026-08-22T15:00:00+05:30",
-       "valid_to":"2026-08-22T19:00:00+05:30"}' > /dev/null
+       "valid_from":"'"$T_PAST"'",
+       "valid_to":"'"$T_LATER"'"}' > /dev/null
 curl -sS -H "$AUTH_ADMIN" "$BASE/passes/v_1" \
   | jq -e '.visit_id == "v_1" and (.code6 | test("^[0-9]{6}$"))' > /dev/null
 pass
@@ -458,7 +469,7 @@ pass
 step "8.3  acknowledge with zones and a window -> restriction lifts"
 curl -sS -X POST "$BASE/visits/v_2/arrival-ack" \
   -H 'Content-Type: application/json' -H "$AUTH_FACULTY" \
-  -d '{"allowed_zones":["z_2","z_5"],"valid_to":"2026-08-22T21:00:00+05:30"}' \
+  -d '{"allowed_zones":["z_2","z_5"],"valid_to":"'"$T_LATER"'"}' \
   | jq -e '.restricted == false
            and .host_acked_at != null
            and (.allowed_zones | length) == 3
