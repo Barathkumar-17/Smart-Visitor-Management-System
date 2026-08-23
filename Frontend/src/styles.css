@@ -715,3 +715,106 @@ button.primary:hover:not(:disabled) {
 .status-rejected {
   opacity: 0.7;
 }
+
+/* Faculty inbox and approval */
+
+.request-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.request-name {
+  margin: 0 0 2px;
+  font-size: 19px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+
+.approval-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.zone-multi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zone-check {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.zone-check.checked {
+  border-color: var(--accent);
+  background: #e8f0fe;
+}
+
+.zone-check input {
+  width: auto;
+  margin: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.checkbox-row .field-hint {
+  margin-top: 2px;
+}
+
+.reject-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.reject-row .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.reject-row .decision {
+  flex: 0 0 auto;
+  padding: 10px 22px;
+  font-size: 16px;
+}
+
+.status-requested {
+  background: #fef7e0;
+  border-color: #e37400;
+  color: #8a4b00;
+}
+
+.status-restricted {
+  background: #fce8e6;
+  border-color: var(--red);
+  color: #8c1d18;
+}
