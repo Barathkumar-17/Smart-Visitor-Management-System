@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.local
+.vite/
+
+# Local working documents — kept out of the public repository
+CLAUDE.md
+UI-SPEC.md
