@@ -931,3 +931,34 @@ input[type='file'] {
   padding: 6px;
   font-size: 14px;
 }
+
+/* Camera scanning */
+
+.qr-scanner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.camera-region {
+  width: 100%;
+  max-width: 340px;
+}
+
+.camera-region.active {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.camera-region video {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.camera-message {
+  color: #8a4b00;
+  font-weight: 600;
+}

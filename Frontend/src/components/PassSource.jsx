@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getVisit } from '../api/visits';
 import { getVisitor } from '../api/visitors';
 import { getPass } from '../api/passes';
+import QrScanner from './QrScanner';
 import ErrorBanner from './ErrorBanner';
 
 // /dev/reset hands back identical ids every time. GET /visits (the list) is
@@ -68,6 +69,32 @@ export default function PassSource({
     }
   }
 
+  // A scanned QR carries visit_id in its payload, so the camera path can show
+  // the same preview the picker does. If that lookup fails the scan still goes
+  // ahead on the credentials alone — the signature check is what decides.
+  async function onDecoded(qr) {
+    const visitId = qr?.payload?.visit_id;
+    if (!visitId) {
+      onArmed({ qr });
+      return;
+    }
+    try {
+      const visit = await getVisit(visitId);
+      const visitor = await getVisitor(visit.visitor_id).catch(() => null);
+      const people = [
+        { role: 'visitor', name: visitor?.name ?? 'Visitor', photo_ref: visitor?.photo_ref },
+        ...(visit.companions ?? []).map((c) => ({
+          role: 'companion',
+          name: c.name,
+          photo_ref: c.photo_ref,
+        })),
+      ];
+      onArmed({ visit, visitor, qr, people });
+    } catch {
+      onArmed({ qr });
+    }
+  }
+
   return (
     <>
       <section className="panel">
@@ -96,6 +123,11 @@ export default function PassSource({
             No visit is in a state this screen can act on. It needs one of: {statuses.join(', ')}.
           </p>
         )}
+      </section>
+
+      <section className="panel">
+        <h3>Camera</h3>
+        <QrScanner onDecoded={onDecoded} onError={setError} />
       </section>
 
       <section className="panel">
