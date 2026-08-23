@@ -285,11 +285,16 @@ def list_visits(
     host_id: str | None = None,
     status: str | None = None,
     date: str | None = None,
+    visitor_id: str | None = None,
 ) -> list[Visit]:
-    """The faculty inbox.
+    """The faculty inbox, and a visitor's own list of visits.
 
     `date` filters on scheduled_at as a LOCAL_TZ calendar date, not a UTC one - a visit at 02:00 IST belongs to that IST day, and
     comparing in UTC would file it under the previous one.
+
+    `visitor_id` is what lets a visitor find their own pass again. The router
+    forces it to the caller's own id for role "visitor", so it narrows the list
+    rather than opening it - passing somebody else's id cannot widen it.
     """
     if host_id:
         visits = visit_repo.list_by_host(host_id, status)
@@ -297,6 +302,9 @@ def list_visits(
         visits = visit_repo.list_by_status(status)
     else:
         visits = visit_repo.list_all()
+
+    if visitor_id:
+        visits = [v for v in visits if v.visitor_id == visitor_id]
 
     if date:
         try:

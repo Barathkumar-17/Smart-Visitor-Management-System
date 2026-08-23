@@ -10,6 +10,7 @@ state machine enforces that by raising IllegalTransition.
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.errors import NotPermitted
 from app.core.security import assert_owns_visitor, require_role, require_user
 from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
@@ -61,9 +62,26 @@ async def list_visits(
         default=None,
         description="YYYY-MM-DD. Filters scheduled_at as a LOCAL_TZ calendar day.",
     ),
-    _user=Depends(require_role("faculty")),
+    user=Depends(require_user()),
 ):
-    """The faculty inbox."""
+    """The faculty inbox - and, for a visitor account, its own visits.
+
+    A visitor has to be able to find their pass again after closing the tab.
+    They cannot list anyone else's: the visitor_id filter is forced to their own
+    id here and the body cannot override it, so this narrows the list rather
+    than opening it. Any other non-faculty role is still refused.
+    """
+    if user.get("role") == "visitor":
+        return visit_service.list_visits(
+            status=status, date=date, visitor_id=user["visitor_id"]
+        )
+
+    if user.get("role") not in ("faculty", "admin"):
+        raise NotPermitted(
+            f"Role '{user.get('role')}' may not list visits",
+            {"role": user.get("role"), "required": ["faculty"]},
+        )
+
     return visit_service.list_visits(host_id=host_id, status=status, date=date)
 
 

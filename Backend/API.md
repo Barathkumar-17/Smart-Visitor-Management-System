@@ -102,7 +102,7 @@ The one exception is `422`, which keeps the framework's own format.
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
 | `POST /visits` | any | Request a visit | `201` + the visit, status `requested` | `400` over 4 companions, or `companions` and `person_count` both sent · `404` unknown visitor or host · `409` visitor already inside · `422` timestamp without a timezone |
-| `GET /visits` | faculty | The staff inbox. Filter `?host_id=` `?status=` `?date=` | `200` + a list | `403` |
+| `GET /visits` | faculty, **visitor** | The staff inbox. Filter `?host_id=` `?status=` `?date=`. A **visitor** account gets only its own visits — the filter is forced to its own id and no query parameter can widen it — which is how it finds its pass again after closing the tab | `200` + a list | `403` guard or security |
 | `GET /visits/{id}` | any | One visit and everyone on it | `200` + the visit plus `companions` | `404` |
 | `POST /visits/{id}/approve` | faculty | Set zones and window, issue the QR | `200` + the visit, status `issued` | `400` window ends before it starts, or unknown zone in the list · `404` unknown visit or meeting zone · `409` not `requested` |
 | `POST /visits/{id}/reject` | faculty | Turn down a request | `200` + status `rejected` | `409` not `requested` · `422` no reason given |

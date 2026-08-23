@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createVisitor, getVisitor, sendOtp, verifyOtp, digilocker } from '../api/visitors';
 import { useAuth } from '../auth/AuthContext';
-import { createVisit, getVisit } from '../api/visits';
+import { createVisit, getVisit, listVisits } from '../api/visits';
 import { getPass } from '../api/passes';
 import { getHosts } from '../api/reference';
 import { fileToBase64 } from '../lib/fileToBase64';
@@ -50,6 +50,7 @@ export default function VisitorPage() {
   const [count, setCount] = useState('');
 
   const [visit, setVisit] = useState(null);
+  const [myVisits, setMyVisits] = useState([]);
   const [pass, setPass] = useState(null);
 
   useEffect(() => {
@@ -63,11 +64,32 @@ export default function VisitorPage() {
 
   useEffect(() => {
     if (!isVisitorAccount || !visitorId) return;
-    getVisitor(visitorId)
-      .then(setVisitor)
+    // Load the account's own record AND its existing visits. Without the
+    // second call the visit id would live only in this component's state, so
+    // closing the tab would lose the pass with no way back to it.
+    Promise.all([getVisitor(visitorId), listVisits().catch(() => [])])
+      .then(([self, mine]) => {
+        setVisitor(self);
+        setMyVisits(mine);
+        // Newest first, and an issued pass beats a pending request.
+        const live = [...mine].sort(
+          (a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0),
+        );
+        const best = live.find((v) => v.status === 'issued') ?? live[0] ?? null;
+        if (best) setVisit(best);
+      })
       .catch(setError)
       .finally(() => setLoadingSelf(false));
   }, [isVisitorAccount, visitorId]);
+
+  // Once a pass exists, show it without making the visitor ask.
+  useEffect(() => {
+    if (!visit || pass) return;
+    if (!['issued', 'inside'].includes(visit.status)) return;
+    getPass(visit.id)
+      .then(setPass)
+      .catch(() => {});
+  }, [visit, pass]);
 
   async function pickPhoto(file) {
     setError(null);
@@ -203,14 +225,34 @@ export default function VisitorPage() {
   if (pass) {
     return (
       <div className="guard-screen">
-        <p className="step-label">Done</p>
+        <p className="step-label">Approved</p>
         <h2 className="step-question">Your pass</h2>
         <section className="panel">
           <QrDisplay qr={pass.qr} code6={pass.code6} />
           <p className="field-hint">
-            Show this at the gate. The code underneath works if the QR will not scan.
+            Show this at the gate. The number underneath works if the QR will not scan.
+          </p>
+          <dl className="detail-grid">
+            <dt>Visit</dt>
+            <dd>
+              {visit?.id} <span className={`status-badge status-${visit?.status}`}>{visit?.status}</span>
+            </dd>
+            <dt>Purpose</dt>
+            <dd>{visit?.purpose}</dd>
+          </dl>
+          <p className="field-hint">
+            This stays here. Signing back in brings you straight to it.
           </p>
         </section>
+        <button
+          type="button"
+          onClick={() => {
+            setPass(null);
+            setVisit(null);
+          }}
+        >
+          Request another visit
+        </button>
       </div>
     );
   }
@@ -297,10 +339,11 @@ export default function VisitorPage() {
             </span>
           </div>
           <button type="button" className="primary next-button" disabled={busy} onClick={loadPass}>
-            {busy ? 'Checking…' : 'Show my pass'}
+            {busy ? 'Checking…' : 'Check again'}
           </button>
           <p className="field-hint">
-            This will fail with a 404 until the host approves — that is the correct answer, not a bug.
+            No pass exists until the host approves, so this stays empty until they do. Your request
+            is saved — you can close the tab and sign back in to check.
           </p>
         </section>
       ) : (

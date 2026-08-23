@@ -962,3 +962,8 @@ input[type='file'] {
   color: #8a4b00;
   font-weight: 600;
 }
+
+.status-issued,
+.status-inside {
+  font-weight: 600;
+}
