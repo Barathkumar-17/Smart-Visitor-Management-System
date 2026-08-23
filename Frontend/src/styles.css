@@ -967,3 +967,16 @@ input[type='file'] {
 .status-inside {
   font-weight: 600;
 }
+
+.computed-window {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 16px;
+}
+
+.computed-window .field-hint {
+  margin-top: 2px;
+}

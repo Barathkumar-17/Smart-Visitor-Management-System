@@ -4,7 +4,28 @@ import { getVisitor } from '../../api/visitors';
 import { getZones, getHosts } from '../../api/reference';
 import { ZoneSelect, ZoneMultiSelect } from '../../components/ZoneSelect';
 import ErrorBanner from '../../components/ErrorBanner';
-import { toApiDateTime, localInputValue, formatStamp } from '../../lib/datetime';
+import { toApiDateTime, formatStamp } from '../../lib/datetime';
+
+// How long an approved pass lasts.
+//
+// The host is not asked for this. They already chose a time when the visit was
+// requested, and making them retype it as two datetime pickers was work with no
+// decision in it - every approval used the defaults anyway.
+//
+// The window opens now (a visitor who turns up early should not be refused) or
+// at the scheduled time if that is earlier, and closes VISIT_HOURS after
+// whichever of the two is later. That guarantees the window always contains the
+// scheduled time and can never end before it starts, which the backend rejects.
+const VISIT_HOURS = 4;
+
+function windowFor(visit) {
+  const now = new Date();
+  const scheduled = visit?.scheduled_at ? new Date(visit.scheduled_at) : now;
+  const valid = Number.isNaN(scheduled.getTime()) ? now : scheduled;
+  const from = valid < now ? valid : now;
+  const anchor = valid > now ? valid : now;
+  return { from, to: new Date(anchor.getTime() + VISIT_HOURS * 3600 * 1000) };
+}
 
 /**
  * Inbox and approval.
@@ -24,8 +45,6 @@ export default function Inbox() {
   const [openId, setOpenId] = useState(null);
   const [meetingZone, setMeetingZone] = useState('');
   const [allowedZones, setAllowedZones] = useState([]);
-  const [validFrom, setValidFrom] = useState(localInputValue(0));
-  const [validTo, setValidTo] = useState(localInputValue(240));
   const [vouch, setVouch] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -61,8 +80,6 @@ export default function Inbox() {
     setError(null);
     setMeetingZone('');
     setAllowedZones([]);
-    setValidFrom(localInputValue(0));
-    setValidTo(localInputValue(240));
     setVouch(false);
     setRejectReason('');
   }
@@ -71,12 +88,13 @@ export default function Inbox() {
     setBusy(true);
     setError(null);
     try {
+      const { from, to } = windowFor(row);
       // Every datetime carries a UTC offset. A naive value is a 422.
       const visit = await approveVisit(row.id, {
         meeting_zone_id: meetingZone,
         allowed_zones: allowedZones,
-        valid_from: toApiDateTime(validFrom),
-        valid_to: toApiDateTime(validTo),
+        valid_from: toApiDateTime(from),
+        valid_to: toApiDateTime(to),
         vouch,
       });
       setOutcome({ kind: 'approved', visit, name: row.visitor?.name });
@@ -201,25 +219,14 @@ export default function Inbox() {
                   <ZoneMultiSelect zones={zones} value={allowedZones} onChange={setAllowedZones} />
                 </div>
 
-                <div className="gate-form">
-                  <label className="field" htmlFor={`vf-${row.id}`}>
-                    <span className="field-label">Valid from</span>
-                    <input
-                      id={`vf-${row.id}`}
-                      type="datetime-local"
-                      value={validFrom}
-                      onChange={(e) => setValidFrom(e.target.value)}
-                    />
-                  </label>
-                  <label className="field" htmlFor={`vt-${row.id}`}>
-                    <span className="field-label">Valid to</span>
-                    <input
-                      id={`vt-${row.id}`}
-                      type="datetime-local"
-                      value={validTo}
-                      onChange={(e) => setValidTo(e.target.value)}
-                    />
-                  </label>
+                <div className="field">
+                  <span className="field-label">Pass valid</span>
+                  <p className="computed-window">
+                    {formatStamp(windowFor(row).from)} &rarr; {formatStamp(windowFor(row).to)}
+                    <span className="field-hint">
+                      {VISIT_HOURS} hours around the requested time. Set automatically.
+                    </span>
+                  </p>
                 </div>
 
                 {alreadyVerified ? (
