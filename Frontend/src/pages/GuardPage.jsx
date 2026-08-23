@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getVisit } from '../api/visits';
 import { getVisitor } from '../api/visitors';
 import { getPass } from '../api/passes';
@@ -37,18 +37,19 @@ export default function GuardPage() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    Promise.all(SEEDED_VISIT_IDS.map((id) => getVisit(id).catch(() => null))).then((rows) => {
-      if (active) {
-        setVisits(rows.filter(Boolean));
-        setLoadingVisits(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
+  // Statuses change underneath this screen — an approved entry flips a visit
+  // from issued to inside — so the list is re-read every time step 1 comes
+  // back, not just once on mount.
+  const loadVisits = useCallback(async () => {
+    setLoadingVisits(true);
+    const rows = await Promise.all(SEEDED_VISIT_IDS.map((id) => getVisit(id).catch(() => null)));
+    setVisits(rows.filter(Boolean));
+    setLoadingVisits(false);
   }, []);
+
+  useEffect(() => {
+    loadVisits();
+  }, [loadVisits]);
 
   function startOver() {
     setStage('scan');
@@ -59,6 +60,7 @@ export default function GuardPage() {
     setCode6('');
     setPlate('');
     setCount('');
+    loadVisits();
   }
 
   // Step 1 to 2. Reads the pass and the visit record. Writes nothing.
