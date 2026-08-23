@@ -246,3 +246,300 @@ button.primary:hover:not(:disabled) {
   color: var(--red);
   flex-shrink: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Guard screen. Read at arm's length under time pressure: large faces, large
+   verdict, no decoration competing with either.
+   --------------------------------------------------------------------------- */
+
+.guard-screen h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.guard-screen .panel {
+  margin-bottom: 16px;
+}
+
+/* Visit picker */
+
+.visit-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.visit-chip {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 8px;
+  justify-content: start;
+  align-items: center;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.visit-chip.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.visit-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+}
+
+.visit-purpose {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+.status-issued {
+  background: #e6f4ea;
+  border-color: #34a853;
+  color: #1e6b33;
+}
+
+.code6-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.code6-row input {
+  max-width: 200px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 20px;
+  letter-spacing: 0.16em;
+}
+
+/* Gate form */
+
+.gate-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.gate-form .field {
+  flex: 1 1 180px;
+  margin-bottom: 0;
+}
+
+.scan-button {
+  width: auto;
+  min-width: 160px;
+  padding: 10px 28px;
+  font-size: 17px;
+}
+
+/* Verdict */
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  border: 2px solid;
+  border-radius: 6px;
+}
+
+.verdict-headline {
+  font-size: 28px;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.verdict-reason {
+  font-size: 16px;
+}
+
+.verdict-green {
+  background: #e6f4ea;
+  border-color: #1e8e3e;
+  color: #10632a;
+}
+
+.verdict-amber {
+  background: #fef7e0;
+  border-color: #e37400;
+  color: #8a4b00;
+}
+
+.verdict-red {
+  background: var(--red-bg);
+  border-color: var(--red);
+  color: #8c1d18;
+}
+
+/* Faces */
+
+.photo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.photo-card {
+  margin: 0;
+  width: 150px;
+}
+
+.photo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 150px;
+  height: 150px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The seeded photographs are 24x24 placeholders. Smoothing them into a blur
+     reads as a broken image; keeping the pixels reads as low-resolution data. */
+  image-rendering: pixelated;
+}
+
+.photo-initials {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.photo-card figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.photo-name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.photo-role {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.role-visitor {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Detail and comparisons */
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 20px;
+  margin: 0 0 20px;
+}
+
+.detail-grid dt {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.detail-grid dd {
+  margin: 0;
+  font-size: 17px;
+}
+
+.phone-link {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 19px;
+}
+
+.comparisons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.comparison {
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.comparison-mismatch {
+  background: #fef7e0;
+  border-color: #e37400;
+}
+
+.comparison-label {
+  display: block;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.comparison-values {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 17px;
+}
+
+.comparison-values em {
+  font-size: 12px;
+  font-style: normal;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.comparison-arrow {
+  color: var(--muted);
+}
+
+.comparison-flag {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a4b00;
+}
+
+.restricted-flag {
+  margin: 16px 0 0;
+  font-weight: 600;
+  color: #8a4b00;
+}
