@@ -5,9 +5,11 @@ import { getPass } from '../api/passes';
 import QrScanner from './QrScanner';
 import ErrorBanner from './ErrorBanner';
 
-// /dev/reset hands back identical ids every time. GET /visits (the list) is
-// faculty-only and 403s a guard, so each one is fetched individually.
-const SEEDED_VISIT_IDS = ['v_1', 'v_2', 'v_3', 'v_4', 'v_5', 'v_6'];
+// /dev/reset hands back identical ids every time. The six seeded visits, plus room for ones created during a demo. A visitor
+// who signs up and requests a pass gets v_7 upward, and the guard has no way to
+// list visits — GET /visits is faculty-only — so the range is probed instead.
+// Ids that do not exist simply 404 and are dropped.
+const SEEDED_VISIT_IDS = Array.from({ length: 14 }, (_, i) => `v_${i + 1}`);
 
 /**
  * Step 1 of every scan screen: choose which pass is being presented.

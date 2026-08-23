@@ -6,7 +6,11 @@ import { ZoneMultiSelect } from '../../components/ZoneSelect';
 import ErrorBanner from '../../components/ErrorBanner';
 import { toApiDateTime, localInputValue, formatStamp } from '../../lib/datetime';
 
-const SEEDED_VISIT_IDS = ['v_1', 'v_2', 'v_3', 'v_4', 'v_5', 'v_6'];
+// The six seeded visits, plus room for ones created during a demo. A visitor
+// who signs up and requests a pass gets v_7 upward, and the guard has no way to
+// list visits — GET /visits is faculty-only — so the range is probed instead.
+// Ids that do not exist simply 404 and are dropped.
+const SEEDED_VISIT_IDS = Array.from({ length: 14 }, (_, i) => `v_${i + 1}`);
 
 /**
  * The host confirming they are free, on a visit that is already inside.
