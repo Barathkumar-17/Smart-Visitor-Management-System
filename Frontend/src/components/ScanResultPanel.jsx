@@ -1,7 +1,7 @@
 import PhotoCard from './PhotoCard';
 import VerdictBanner from './VerdictBanner';
 
-function Comparison({ label, expected, presented, mismatch }) {
+function Comparison({ label, expected, presented, mismatch, presentedLabel = 'presented' }) {
   if (expected == null && presented == null) return null;
   return (
     <div className={`comparison${mismatch ? ' comparison-mismatch' : ''}`}>
@@ -14,11 +14,21 @@ function Comparison({ label, expected, presented, mismatch }) {
           →
         </span>
         <span>
-          <em>presented</em> {presented ?? '—'}
+          <em>{presentedLabel}</em> {presented ?? '—'}
         </span>
       </span>
-      {mismatch && <span className="comparison-flag">mismatch — recorded, not blocked</span>}
+      {mismatch && <span className="comparison-flag">does not match — recorded, not blocked</span>}
     </div>
+  );
+}
+
+function Row({ term, children }) {
+  if (!children) return null;
+  return (
+    <>
+      <dt>{term}</dt>
+      <dd>{children}</dd>
+    </>
   );
 }
 
@@ -33,7 +43,8 @@ export default function ScanResultPanel({ result }) {
   if (!result) return null;
 
   const people = result.people ?? [];
-  const hasDetail = result.visitor_name || result.host_name || result.meeting_zone;
+  const hasDetail =
+    result.visitor_name || result.host_name || result.meeting_zone || result.scanned_zone;
 
   return (
     <section className="scan-result">
@@ -49,40 +60,21 @@ export default function ScanResultPanel({ result }) {
 
       {hasDetail && (
         <dl className="detail-grid">
-          {result.visitor_name && (
-            <>
-              <dt>Visitor</dt>
-              <dd>{result.visitor_name}</dd>
-            </>
-          )}
-          {result.host_name && (
-            <>
-              <dt>Host</dt>
-              <dd>{result.host_name}</dd>
-            </>
-          )}
-          {result.meeting_zone && (
-            <>
-              <dt>Meeting at</dt>
-              <dd>{result.meeting_zone}</dd>
-            </>
-          )}
-          {result.purpose && (
-            <>
-              <dt>Purpose</dt>
-              <dd>{result.purpose}</dd>
-            </>
-          )}
-          {result.host_phone && (
-            <>
-              <dt>Call host</dt>
-              <dd>
-                <a className="phone-link" href={`tel:${result.host_phone}`}>
-                  {result.host_phone}
-                </a>
-              </dd>
-            </>
-          )}
+          <Row term="Visitor">{result.visitor_name}</Row>
+          <Row term="Host">{result.host_name}</Row>
+          <Row term="Scanned at">{result.scanned_zone}</Row>
+          <Row term="Meeting at">{result.meeting_zone}</Row>
+          <Row term="Purpose">{result.purpose}</Row>
+          <Row term="Cleared for">
+            {result.allowed_zones?.length ? result.allowed_zones.join(', ') : null}
+          </Row>
+          <Row term="Call host">
+            {result.host_phone ? (
+              <a className="phone-link" href={`tel:${result.host_phone}`}>
+                {result.host_phone}
+              </a>
+            ) : null}
+          </Row>
         </dl>
       )}
 
@@ -99,8 +91,15 @@ export default function ScanResultPanel({ result }) {
             expected={result.headcount?.expected}
             presented={result.headcount?.recorded}
             mismatch={result.headcount?.mismatch}
+            presentedLabel={'exited' in result ? 'signed out' : 'presented'}
           />
         </div>
+      )}
+
+      {result.partial_exit && (
+        <p className="still-inside">
+          {result.still_inside} still inside — the visit stays open.
+        </p>
       )}
 
       {result.restricted && <p className="restricted-flag">Restricted visit</p>}

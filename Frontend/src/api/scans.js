@@ -25,3 +25,16 @@ export function gateEntry({ qr, code6, vehicle_plate, person_count_in }) {
     omitEmpty({ ...credentials({ qr, code6 }), vehicle_plate, person_count_in }),
   );
 }
+
+// zone_code is the CODE (LIB), never the id (z_2). Mixing them is a silent
+// wrong-zone result rather than an error.
+export function zoneScan({ qr, code6, zone_code }) {
+  return post('/scans/zone', omitEmpty({ ...credentials({ qr, code6 }), zone_code }));
+}
+
+export function gateExit({ qr, code6, vehicle_plate_out, person_count_out }) {
+  return post(
+    '/scans/gate/exit',
+    omitEmpty({ ...credentials({ qr, code6 }), vehicle_plate_out, person_count_out }),
+  );
+}

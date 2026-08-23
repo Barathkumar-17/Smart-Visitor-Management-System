@@ -4,6 +4,9 @@
  * Amber is the important one. Neither a vehicle nor a headcount mismatch blocks
  * entry, and a wrong-zone scan inside campus is recorded rather than refused —
  * a red screen would contradict what the system actually did.
+ *
+ * The three scan responses are told apart by which decision key they carry:
+ * `admitted` for the gate, `ok` for a checkpoint, `exited` for the way out.
  */
 
 const RESULT_WORDS = {
@@ -16,25 +19,42 @@ const RESULT_WORDS = {
   wrong_zone: 'Not cleared for this checkpoint',
 };
 
+function kindOf(result) {
+  if ('admitted' in result) return 'entry';
+  if ('exited' in result) return 'exit';
+  if ('ok' in result) return 'zone';
+  return 'entry';
+}
+
 export function verdictFor(result) {
   if (!result) return null;
 
-  const decided = result.admitted ?? result.ok ?? result.exited ?? false;
+  const kind = kindOf(result);
+  const decided = result.admitted ?? result.exited ?? result.ok ?? false;
   const mismatch = Boolean(result.vehicle?.mismatch || result.headcount?.mismatch);
 
-  // Inside campus the system observes and never blocks.
-  if (result.result === 'wrong_zone') {
-    return { tone: 'amber', headline: 'Recorded — security notified' };
+  // A checkpoint never refuses anyone. Inside campus the system observes.
+  if (kind === 'zone') {
+    return result.result === 'wrong_zone'
+      ? { tone: 'amber', headline: 'Recorded — security notified' }
+      : { tone: 'green', headline: 'Expected here' };
   }
-  if (result.partial_exit) {
-    return { tone: 'amber', headline: 'Partial exit — some people still inside' };
+
+  if (kind === 'exit') {
+    if (result.partial_exit) {
+      const left = result.still_inside;
+      return {
+        tone: 'amber',
+        headline: left ? `Partial exit — ${left} still inside` : 'Partial exit',
+      };
+    }
+    if (!decided) return { tone: 'red', headline: 'Not signed out' };
+    if (mismatch) return { tone: 'amber', headline: 'Signed out — mismatch recorded' };
+    return { tone: 'green', headline: 'Signed out' };
   }
-  if (!decided) {
-    return { tone: 'red', headline: 'Not admitted' };
-  }
-  if (mismatch) {
-    return { tone: 'amber', headline: 'Admitted — mismatch recorded' };
-  }
+
+  if (!decided) return { tone: 'red', headline: 'Not admitted' };
+  if (mismatch) return { tone: 'amber', headline: 'Admitted — mismatch recorded' };
   return { tone: 'green', headline: 'Admitted' };
 }
 
