@@ -10,11 +10,12 @@ For an explanation of what the system *is*, see [the README](../README.md). This
 
 ## Authentication
 
-**Every endpoint needs a token.** The only exceptions are `POST /auth/login` and `GET /health`.
+**Every endpoint needs a token.** The only exceptions are `POST /auth/login`, `POST /auth/visitor/register` and `GET /health`.
 
 | Endpoint | What it does | Returns | If it fails |
 |---|---|---|---|
-| `POST /auth/login` | Exchange a username and password for a token | `200` + `{token, role, name, username, expires_at}` | `401` wrong username **or** password — the message is identical for both, so it never reveals which accounts exist |
+| `POST /auth/login` | Exchange a username and password for a token | `200` + `{token, role, name, username, expires_at, visitor_id}` | `401` wrong username **or** password — the message is identical for both, so it never reveals which accounts exist |
+| `POST /auth/visitor/register` | **Public.** Sign up as a visitor: creates the visitor record *and* an account that owns it, then logs it in | `201` + the same body as a login, with `visitor_id` set | `400` the phone already has an account, or the photo is over 2 MB |
 | `POST /auth/logout` | Invalidate the token you are calling with | `200` + `{logged_out: true}` | `401` no or bad token |
 | `GET /auth/me` | Who the token says you are | `200` + `{id, username, name, role}` | `401` |
 
@@ -26,6 +27,14 @@ Four fixed accounts, one per role:
 | `faculty` | `faculty123` | `faculty` |
 | `security` | `security123` | `security` |
 | `admin` | `admin123` | `admin` |
+
+**Staff accounts are issued; visitor accounts are created.** No endpoint makes a fifth staff account. A visitor signs up at `POST /auth/visitor/register` and gets role `visitor`.
+
+A visitor's **username is their phone**, normalised to the last ten digits — `+91-98111-22233`, `09811122233` and `9811122233` are all one account.
+
+**A visitor account is scoped to itself.** It may read its own visitor record, run its own OTP and DigiLocker, request its own pass and fetch its own QR. Any other visitor's record, visit, pass or scan history is a `403`, and `POST /visits` substitutes the account's own `visitor_id` for whatever the body claims. Every staff endpoint — the inbox, all three scans, the dashboards, `/dev/*` — refuses it.
+
+`admin` satisfies every **staff** role check. It does not make anyone a visitor, and `visitor` satisfies nothing: that role is an ownership boundary, not a privilege level.
 
 Send the token on every other request:
 
@@ -76,7 +85,7 @@ The one exception is `422`, which keeps the framework's own format.
 
 | Endpoint | Role | What it does | Returns | If it fails |
 |---|---|---|---|---|
-| `POST /visitors` | any | Register someone. Only `name` and `phone` required | `201` + the visitor record | `400` photo over 2 MB · `422` name or phone missing |
+| `POST /visitors` | any | Register someone **else** — needs a token, so it is staff registering a walk-up. A visitor signing up for themselves uses `POST /auth/visitor/register` | `201` + the visitor record | `400` photo over 2 MB · `422` name or phone missing |
 | `GET /visitors/{id}` | any | Everything known about one visitor | `200` + the record, including `tier` | `404` no such visitor |
 | `GET /visitors/lookup?phone=` | guard | Find a returning visitor by phone | `200` + the record, or `null` if none | — |
 | `POST /visitors/{id}/otp/send` | any | Send a one-time code | `200` + `{visitor_id, phone, code}` | `404` |

@@ -18,6 +18,9 @@ PREFIXES: dict[str, str] = {
     "pass": "p",
     "scan_event": "s",
     "notification": "n",
+    # Visitor self-service accounts. The four staff accounts have fixed literal
+    # ids (u_guard and friends) and never come from here.
+    "user": "u",
     # Photo refs are "photo_{n}", not an entity id, but
     # the counter belongs here so /dev/reset makes refs deterministic too.
     "photo": "photo",

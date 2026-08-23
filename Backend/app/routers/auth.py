@@ -1,13 +1,23 @@
-"""Login and logout.
+"""Login, sign-up and logout.
 
-POST /auth/login is the ONLY endpoint reachable without a token, along with
-GET /health. Everything else in the system needs one.
+THREE endpoints are reachable without a token: POST /auth/login,
+POST /auth/visitor/register, and GET /health. Everything else needs one.
+
+Staff never sign up. The four accounts are seeded fixtures and there is no
+endpoint that creates a fifth. Visitors are the opposite case - a member of the
+public arrives with no credentials and nobody to ask for any, so they create
+their own account and it owns exactly one Visitor record.
 """
 
 from fastapi import APIRouter, Depends, Header
 
 from app.core.security import require_user
-from app.schemas.auth import LoginRequest, LoginResponse, WhoAmI
+from app.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    VisitorRegisterRequest,
+    WhoAmI,
+)
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -21,6 +31,26 @@ async def login(body: LoginRequest):
     both, so the response never reveals which accounts exist.
     """
     return auth_service.login(body.username, body.password)
+
+
+@router.post("/visitor/register", response_model=LoginResponse, status_code=201)
+async def register_visitor_account(body: VisitorRegisterRequest):
+    """Public sign-up for a visitor. No token required - this is the way in.
+
+    Creates the Visitor record and an account that owns it, then logs that
+    account straight in, so the caller never has to follow this with a login.
+
+    Returns 400 when the phone already has an account, or when the photograph
+    is over the 2 MB limit - and in the second case no account is created.
+    """
+    return auth_service.register_visitor(
+        name=body.name,
+        phone=body.phone,
+        password=body.password,
+        email=body.email,
+        address=body.address,
+        photo_b64=body.photo_b64,
+    )
 
 
 @router.post("/logout")

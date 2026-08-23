@@ -6,6 +6,12 @@ export function login(username, password) {
   return post('/auth/login', { username, password }, { auth: false, handleUnauthorized: false });
 }
 
+// The only endpoint that works without a token. A member of the public has no
+// credentials and nobody to ask for any, so this is the way in.
+export function registerVisitor(body) {
+  return post('/auth/visitor/register', body, { auth: false, handleUnauthorized: false });
+}
+
 export function logout() {
   return post('/auth/logout');
 }

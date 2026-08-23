@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.core.security import require_role, require_user
+from app.core.security import assert_owns_visitor, require_role, require_user
 from app.schemas.pass_ import PassOut
 from app.services import pass_service
 
@@ -25,13 +25,21 @@ def _to_out(issued) -> PassOut:
 
 
 @router.get("/{visit_id}", response_model=PassOut)
-async def get_pass(visit_id: str, _user=Depends(require_user())):
+async def get_pass(visit_id: str, user=Depends(require_user())):
     """The signed payload ready for QR encoding, plus code6.
+
+    A visitor account may fetch only its own pass. The signature is the thing
+    that admits somebody, so handing one to the wrong caller would be handing
+    over a working credential.
 
     The same visit returns a BYTE-IDENTICAL qr object every time, including
     after a meeting-point change or a window extension - neither is in the
     payload. PATCH /visits/{id}/meeting-point demonstrates exactly that.
     """
+    if user.get("role") == "visitor":
+        from app.services import visit_service
+
+        assert_owns_visitor(user, visit_service.get_visit(visit_id).visitor_id)
     return _to_out(pass_service.get_pass_for_visit(visit_id))
 
 

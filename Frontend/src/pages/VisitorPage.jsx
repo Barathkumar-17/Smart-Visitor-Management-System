@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { createVisitor, sendOtp, verifyOtp, digilocker } from '../api/visitors';
+import { createVisitor, getVisitor, sendOtp, verifyOtp, digilocker } from '../api/visitors';
+import { useAuth } from '../auth/AuthContext';
 import { createVisit, getVisit } from '../api/visits';
 import { getPass } from '../api/passes';
 import { getHosts } from '../api/reference';
@@ -16,7 +17,13 @@ import ErrorBanner from '../components/ErrorBanner';
  * name and a phone — the gate screen is the demo and it needs a face.
  */
 export default function VisitorPage() {
+  // A visitor who signed up already HAS a record — their account owns exactly
+  // one. Staff opening this screen do not, so they still see the form.
+  const { role, visitorId } = useAuth();
+  const isVisitorAccount = role === 'visitor';
+
   const [visitor, setVisitor] = useState(null);
+  const [loadingSelf, setLoadingSelf] = useState(isVisitorAccount);
   const [hosts, setHosts] = useState([]);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -53,6 +60,14 @@ export default function VisitorPage() {
       })
       .catch(setError);
   }, []);
+
+  useEffect(() => {
+    if (!isVisitorAccount || !visitorId) return;
+    getVisitor(visitorId)
+      .then(setVisitor)
+      .catch(setError)
+      .finally(() => setLoadingSelf(false));
+  }, [isVisitorAccount, visitorId]);
 
   async function pickPhoto(file) {
     setError(null);
@@ -116,12 +131,24 @@ export default function VisitorPage() {
       setPass(await getPass(visit.id));
     });
 
+  if (loadingSelf) {
+    return (
+      <div className="guard-screen">
+        <p className="muted">Loading your details…</p>
+      </div>
+    );
+  }
+
   /* ---------------- 1. register ---------------- */
   if (!visitor) {
     return (
       <div className="guard-screen">
         <p className="step-label">Step 1 of 3</p>
-        <h2 className="step-question">Register</h2>
+        <h2 className="step-question">Register a visitor</h2>
+        <p className="muted">
+          You are signed in as {role}. This registers someone else — a visitor signing up for
+          themselves does it from the login screen and never reaches this form.
+        </p>
         <ErrorBanner error={error} onDismiss={() => setError(null)} />
 
         <section className="panel">

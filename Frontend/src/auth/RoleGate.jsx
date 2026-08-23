@@ -13,6 +13,7 @@ const HOME_BY_ROLE = {
   faculty: '/faculty',
   admin: '/guard',
   security: '/visitor',
+  visitor: '/visitor',
 };
 
 export function homeFor(role) {
@@ -22,7 +23,10 @@ export function homeFor(role) {
 export function roleAllows(role, allow) {
   if (!role) return false;
   if (allow === 'any') return true;
-  if (role === 'admin') return true; // admin satisfies every role check
+  // admin satisfies every STAFF role check. A visitor never does: that role is
+  // an ownership boundary rather than a rung on a ladder.
+  if (role === 'visitor') return false;
+  if (role === 'admin') return true;
   return Array.isArray(allow) ? allow.includes(role) : role === allow;
 }
 

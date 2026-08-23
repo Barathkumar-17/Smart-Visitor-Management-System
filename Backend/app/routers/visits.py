@@ -10,7 +10,7 @@ state machine enforces that by raising IllegalTransition.
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.security import require_role, require_user
+from app.core.security import assert_owns_visitor, require_role, require_user
 from app.schemas.scan import ScanEventOut
 from app.schemas.visit import (
     ApproveRequest,
@@ -28,15 +28,22 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 
 
 @router.post("", response_model=VisitOut, status_code=201)
-async def create_visit(body: VisitCreate, _user=Depends(require_user())):
+async def create_visit(body: VisitCreate, user=Depends(require_user())):
     """Pre-registered pass request. Status `requested`.
+
+    A visitor account may only request a pass for itself, so the visitor_id in
+    the body is ignored for that role and replaced with the account's own -
+    otherwise anyone could book a visit in somebody else's name.
 
     Returns 409 VisitorAlreadyInside when the visitor is inside on another
     visit, 400 CompanionLimitExceeded beyond four companions, and 400
     InvalidRequest when companions[] and person_count are both supplied.
     """
+    visitor_id = (
+        user["visitor_id"] if user.get("role") == "visitor" else body.visitor_id
+    )
     return visit_service.create_visit(
-        visitor_id=body.visitor_id,
+        visitor_id=visitor_id,
         host_id=body.host_id,
         purpose=body.purpose,
         scheduled_at=body.scheduled_at,
@@ -61,23 +68,30 @@ async def list_visits(
 
 
 @router.get("/{visit_id}", response_model=VisitDetail)
-async def get_visit(visit_id: str, _user=Depends(require_user())):
-    """One visit, with everyone linked to it."""
+async def get_visit(visit_id: str, user=Depends(require_user())):
+    """One visit, with everyone linked to it.
+
+    A visitor account sees only its own visits. Staff see any, because the
+    guard picker and the faculty inbox both need to read a visit they are not
+    the subject of.
+    """
     visit = visit_service.get_visit(visit_id)
+    assert_owns_visitor(user, visit.visitor_id)
     detail = VisitDetail.model_validate(visit)
     detail.companions = visit_service.list_companions(visit_id)
     return detail
 
 
 @router.get("/{visit_id}/scans", response_model=list[ScanEventOut])
-async def get_visit_scans(visit_id: str, _user=Depends(require_user())):
+async def get_visit_scans(visit_id: str, user=Depends(require_user())):
     """The audit trail for one visit.
 
     Empty until the first scan writes a ScanEvent. It is exposed because
     the design lists it under Visits, and an endpoint that returns an honest
     empty list is better than one that 404s until a later phase.
     """
-    visit_service.get_visit(visit_id)
+    visit = visit_service.get_visit(visit_id)
+    assert_owns_visitor(user, visit.visitor_id)
     return scan_service.list_for_visit(visit_id)
 
 

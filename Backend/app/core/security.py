@@ -56,7 +56,11 @@ def session_now() -> datetime:
 # accounts in, not a service defending a password database.
 _PBKDF2_ROUNDS = 120_000
 
-ROLES = ("guard", "faculty", "security", "admin")
+# "visitor" is a self-service account, created by POST /auth/visitor/register
+# rather than seeded. It is deliberately NOT covered by admin's blanket pass in
+# require_role: admin satisfying a staff role is superuser behaviour, but a
+# visitor role is an ownership boundary, not a privilege level.
+ROLES = ("guard", "faculty", "security", "admin", "visitor")
 
 
 def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -129,7 +133,13 @@ def resolve_token(authorization: str | None) -> dict[str, Any]:
         user_repo.delete_session(token)
         raise NotAuthenticated("The account for this token no longer exists.", {})
 
-    return {"id": user.id, "name": user.name, "role": user.role, "username": user.username}
+    return {
+        "id": user.id,
+        "name": user.name,
+        "role": user.role,
+        "username": user.username,
+        "visitor_id": getattr(user, "visitor_id", None),
+    }
 
 
 def require_user():
@@ -171,3 +181,42 @@ def require_role(*roles: str):
         )
 
     return dependency
+
+
+def require_staff():
+    """Any logged-in caller who is NOT a self-service visitor.
+
+    `require_user` means "anyone with a token", and before visitor accounts
+    existed that was the same thing as "anyone we trust". It is not any more.
+    Endpoints that were written as require_user because every caller was staff
+    should say so explicitly rather than silently widening the moment a new
+    role appears.
+    """
+
+    async def dependency(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        user = resolve_token(authorization)
+        if user["role"] == "visitor":
+            raise NotPermitted(
+                "This endpoint is for staff. A visitor account cannot call it.",
+                {"role": user["role"]},
+            )
+        return user
+
+    return dependency
+
+
+def assert_owns_visitor(user: dict[str, Any], visitor_id: str) -> None:
+    """Stop a visitor account reaching another visitor's record.
+
+    Staff are unaffected - a guard has to be able to look at whoever is at the
+    gate. This only constrains role "visitor", which can see itself and nothing
+    else. Without it, registering an account would be enough to read every
+    visitor, every visit and every pass in the system.
+    """
+    if user.get("role") != "visitor":
+        return
+    if user.get("visitor_id") != visitor_id:
+        raise NotPermitted(
+            "A visitor account may only read its own record.",
+            {"role": "visitor"},
+        )

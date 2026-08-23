@@ -250,3 +250,8 @@ class User:
     name: str
     salt: str
     password_hash: str
+
+    # Set only on role "visitor": the Visitor record this account speaks for.
+    # Staff accounts leave it None. It is what scopes a visitor to their own
+    # data - without it a logged-in visitor could read every other visitor.
+    visitor_id: str | None = None
