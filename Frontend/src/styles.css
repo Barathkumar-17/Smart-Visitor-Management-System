@@ -543,3 +543,86 @@ button.primary:hover:not(:disabled) {
   font-weight: 600;
   color: #8a4b00;
 }
+
+/* Three-step guard flow. One decision on screen at a time. */
+
+.step-label {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.step-question {
+  margin: 0 0 16px;
+  font-size: 28px;
+}
+
+.decision-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.decision {
+  flex: 1 1 240px;
+  padding: 22px 20px;
+  border: 2px solid;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.decision-approve {
+  background: #1e8e3e;
+  border-color: #17702f;
+}
+
+.decision-approve:hover:not(:disabled) {
+  background: #17702f;
+}
+
+.decision-refuse {
+  background: var(--red);
+  border-color: #8c1d18;
+}
+
+.decision-refuse:hover:not(:disabled) {
+  background: #8c1d18;
+}
+
+.next-button {
+  max-width: 280px;
+}
+
+.back-link {
+  font-size: 15px;
+}
+
+.not-verified-note {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.tier {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.tier-verified {
+  background: #e6f4ea;
+  border-color: #34a853;
+  color: #1e6b33;
+}
