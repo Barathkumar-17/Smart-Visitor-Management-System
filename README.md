@@ -6,6 +6,7 @@ This is a **backend**: the engine, not the screens. There is no app and no websi
 
 Nothing is saved to disk. It runs entirely in memory, starts with a realistic campus already loaded, and forgets everything when you stop it. That is deliberate — you cannot break it in any way a restart won't fix.
 
+
 **Endpoint reference:** [`Backend/API.md`](Backend/API.md) — every endpoint, what it returns, and what each failure means.
 
 ---
